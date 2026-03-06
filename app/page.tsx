@@ -26,6 +26,12 @@ export default function Home() {
               >
                 View dashboard
               </a>
+<a
+  href="/permits"
+  className="rounded-lg border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
+>
+  View permit activity
+</a>
               <a
                 href="#reports"
                 className="rounded-lg border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
