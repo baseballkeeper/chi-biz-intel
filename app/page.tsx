@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from "react"
 
-type Row = { name: string; coffeeShops: number }
+type Row = {
+  areaId: string
+  name: string
+  coffeeShops: number
+  population: number
+  coffeePer10k: number | null
+}
 
 export default function Home() {
   const [rows, setRows] = useState<Row[]>([])
@@ -45,13 +51,19 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-gray-50 p-10">
       <h1 className="text-4xl font-bold mb-2">Chicago Business Intelligence</h1>
-      <p className="text-gray-600 mb-6">Where should I open a business in Chicago?</p>
+      <p className="text-gray-600 mb-6">
+        Where should I open a business in Chicago?
+      </p>
 
       <div className="bg-white rounded-xl shadow p-6">
         <div className="flex items-baseline justify-between gap-6 mb-4">
-          <h2 className="text-xl font-semibold">Top Coffee Shop Presence (PoC)</h2>
+          <h2 className="text-xl font-semibold">
+            Top Underserved Coffee Markets
+          </h2>
           <div className="text-sm text-gray-500">
-            {refreshedAt ? `Data refreshed: ${new Date(refreshedAt).toLocaleString()}` : ""}
+            {refreshedAt
+              ? `Data refreshed: ${new Date(refreshedAt).toLocaleString()}`
+              : ""}
           </div>
         </div>
 
@@ -68,15 +80,19 @@ export default function Home() {
           <table className="w-full text-left">
             <thead>
               <tr className="border-b">
-                <th className="py-2">Community Area</th>
-                <th>Coffee-ish Businesses</th>
+                <th className="py-2">Neighborhood</th>
+                <th>Coffee Shops</th>
+                <th>Population</th>
+                <th>Coffee / 10k</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.name} className="border-b">
+                <tr key={r.areaId} className="border-b">
                   <td className="py-2 font-medium">{r.name}</td>
                   <td>{r.coffeeShops}</td>
+                  <td>{r.population.toLocaleString()}</td>
+                  <td>{r.coffeePer10k?.toFixed(2) ?? "—"}</td>
                 </tr>
               ))}
             </tbody>
