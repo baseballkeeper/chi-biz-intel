@@ -118,7 +118,9 @@ export async function GET(request: Request) {
       street_name,
       work_description,
       reported_cost,
-      community_area
+      community_area,
+      latitude,
+      longitude
     WHERE ${filters.join(" AND ")}
     ORDER BY application_start_date DESC
     LIMIT 500
@@ -160,6 +162,16 @@ export async function GET(request: Request) {
         ? Number(row.reported_cost)
         : null
 
+      const lat =
+        row.latitude !== undefined
+          ? Number(row.latitude)
+          : null
+
+      const lon =
+        row.longitude !== undefined
+          ? Number(row.longitude)
+          : null
+
       return {
         permitNumber: row.permit_ || "",
         permitType: row.permit_type || "",
@@ -175,6 +187,14 @@ export async function GET(request: Request) {
             ? cost
             : null,
         communityArea: row.community_area || "",
+        latitude:
+          lat !== null && Number.isFinite(lat)
+            ? lat
+            : null,
+        longitude:
+          lon !== null && Number.isFinite(lon)
+            ? lon
+            : null,
       }
     })
 

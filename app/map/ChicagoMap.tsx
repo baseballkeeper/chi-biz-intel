@@ -3,8 +3,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  CircleMarker,
   GeoJSON,
   MapContainer,
+  Popup,
   TileLayer,
   useMap,
 } from "react-leaflet";
@@ -39,18 +41,23 @@ type Permit = {
   workDescription: string;
   reportedCost: number | null;
   communityArea: string;
-  latitude?: number;
-  longitude?: number;
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
 type PermitResponse = {
   count: number;
   matched?: number;
   limited: boolean;
-  complete?: boolean;
-  coordinateBased?: boolean;
   permits: Permit[];
   error?: string;
+};
+
+type PermitLocation = {
+  key: string;
+  latitude: number;
+  longitude: number;
+  permits: Permit[];
 };
 
 const CHICAGO_CENTER: [number, number] = [
@@ -98,7 +105,9 @@ function formatDate(value: string): string {
 }
 
 function formatMoney(value: number | null): string {
-  if (value === null) return "Not reported";
+  if (value === null || !Number.isFinite(value)) {
+    return "Not reported";
+  }
 
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -156,6 +165,7 @@ export default function ChicagoMap() {
   const [permitLoading, setPermitLoading] = useState(false);
   const [permitError, setPermitError] = useState("");
   const [permitLimited, setPermitLimited] = useState(false);
+  const [showMarkers, setShowMarkers] = useState(true);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -200,7 +210,9 @@ export default function ChicagoMap() {
             : "Could not load geography"
         );
       } finally {
-        if (!controller.signal.aborted) setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
     }
 
@@ -226,7 +238,6 @@ export default function ChicagoMap() {
   );
 
   const communityArea = getCommunityArea(selected, layer);
-
   const selectedLocation = selected
     ? getName(selected, layer)
     : "";
@@ -273,7 +284,8 @@ export default function ChicagoMap() {
             days: String(permitDays),
           });
 
-          endpoint = `/api/neighborhood-permits?${params.toString()}`;
+          endpoint =
+            `/api/neighborhood-permits?${params.toString()}`;
         }
 
         const response = await fetch(endpoint, {
@@ -333,6 +345,54 @@ export default function ChicagoMap() {
       )
       .slice(0, 12);
   }, [sortedFeatures, search, layer]);
+
+  const permitLocations = useMemo(() => {
+    const groups = new Map<string, PermitLocation>();
+
+    for (const permit of permits) {
+      const lat = permit.latitude;
+      const lon = permit.longitude;
+
+      if (
+        typeof lat !== "number" ||
+        typeof lon !== "number" ||
+        !Number.isFinite(lat) ||
+        !Number.isFinite(lon) ||
+        lat < -90 ||
+        lat > 90 ||
+        lon < -180 ||
+        lon > 180
+      ) {
+        continue;
+      }
+
+      // Group permits at identical coordinates.
+      const key = `${lat.toFixed(6)},${lon.toFixed(6)}`;
+
+      const existing = groups.get(key);
+
+      if (existing) {
+        existing.permits.push(permit);
+      } else {
+        groups.set(key, {
+          key,
+          latitude: lat,
+          longitude: lon,
+          permits: [permit],
+        });
+      }
+    }
+
+    return Array.from(groups.values());
+  }, [permits]);
+
+  const mappedPermitCount = permitLocations.reduce(
+    (total, location) => total + location.permits.length,
+    0
+  );
+
+  const unmappedPermitCount =
+    permits.length - mappedPermitCount;
 
   function selectFeature(feature: AreaFeature) {
     const name = getName(feature, layer);
@@ -467,12 +527,31 @@ export default function ChicagoMap() {
                     : "Permit records returned for this community area"}
                 </p>
 
+                {!permitLoading && !permitError && (
+                  <p className="mt-3 text-xs text-slate-600">
+                    {mappedPermitCount} permits at{" "}
+                    {permitLocations.length} mapped locations
+                  </p>
+                )}
+
                 {permitLimited && (
                   <p className="mt-2 text-xs text-amber-800">
                     Results are limited to 500 records.
                   </p>
                 )}
               </div>
+
+              <label className="mt-5 flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={showMarkers}
+                  onChange={(event) =>
+                    setShowMarkers(event.target.checked)
+                  }
+                  className="h-4 w-4 accent-blue-700"
+                />
+                Show permit markers
+              </label>
             </div>
           ) : (
             <div className="mt-6 border-t border-slate-200 pt-5">
@@ -563,6 +642,92 @@ export default function ChicagoMap() {
                 }}
               />
             )}
+
+            {selected &&
+              showMarkers &&
+              !permitLoading &&
+              !permitError &&
+              permitLocations.map((location) => (
+                <CircleMarker
+                  key={`${selectedLocation}-${location.key}`}
+                  center={[
+                    location.latitude,
+                    location.longitude,
+                  ]}
+                  radius={
+                    location.permits.length > 1 ? 9 : 7
+                  }
+                  pathOptions={{
+                    color: "#ffffff",
+                    weight: 2,
+                    fillColor: "#dc2626",
+                    fillOpacity: 0.9,
+                  }}
+                >
+                  <Popup maxWidth={330} minWidth={220}>
+                    <div className="space-y-3">
+                      <div>
+                        <strong className="text-sm">
+                          {location.permits[0].address ||
+                            "Address unavailable"}
+                        </strong>
+                        <p className="mt-1 text-xs text-slate-600">
+                          {location.permits.length}{" "}
+                          {location.permits.length === 1
+                            ? "permit"
+                            : "permits"}{" "}
+                          at this location
+                        </p>
+                      </div>
+
+                      <div className="max-h-64 space-y-3 overflow-y-auto">
+                        {location.permits.map((permit, index) => (
+                          <div
+                            key={`${permit.permitNumber}-${index}`}
+                            className="border-t border-slate-200 pt-2"
+                          >
+                            <p className="text-xs font-semibold">
+                              {permit.permitType ||
+                                "Permit type unavailable"}
+                            </p>
+
+                            <p className="mt-1 text-xs">
+                              <strong>Status:</strong>{" "}
+                              {permit.permitStatus ||
+                                permit.permitMilestone ||
+                                "Unavailable"}
+                            </p>
+
+                            <p className="mt-1 text-xs">
+                              <strong>Applied:</strong>{" "}
+                              {formatDate(
+                                permit.applicationStartDate
+                              )}
+                            </p>
+
+                            <p className="mt-1 text-xs">
+                              <strong>Cost:</strong>{" "}
+                              {formatMoney(permit.reportedCost)}
+                            </p>
+
+                            <p className="mt-1 text-xs">
+                              <strong>Permit:</strong>{" "}
+                              {permit.permitNumber ||
+                                "Unavailable"}
+                            </p>
+
+                            {permit.workDescription && (
+                              <p className="mt-2 whitespace-normal text-xs leading-5">
+                                {permit.workDescription}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </Popup>
+                </CircleMarker>
+              ))}
           </MapContainer>
         </div>
       </div>
@@ -636,18 +801,25 @@ export default function ChicagoMap() {
                   and issued permits.
                 </p>
 
+                <p className="mt-2 text-xs text-slate-600">
+                  {mappedPermitCount} permits plotted at{" "}
+                  {permitLocations.length} locations.
+                  {unmappedPermitCount > 0 &&
+                    ` ${unmappedPermitCount} returned records have no usable coordinates.`}
+                </p>
+
                 {layer === "neighborhoods" && (
                   <p className="mt-2 text-xs leading-5 text-slate-600">
-                    Neighborhood results are based on permit
-                    coordinates and approximate boundaries.
-                    Records without usable coordinates are excluded.
+                    Neighborhood results use permit coordinates
+                    and approximate boundaries. Records without
+                    usable coordinates are excluded.
                   </p>
                 )}
 
                 {permitLimited && (
                   <p className="mt-2 text-xs font-medium text-amber-800">
                     Only the latest 500 records are available
-                    in this result. The list below shows up to 25.
+                    in this result.
                   </p>
                 )}
               </div>
@@ -667,7 +839,8 @@ export default function ChicagoMap() {
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <h3 className="font-semibold text-slate-900">
-                            {permit.address || "Address unavailable"}
+                            {permit.address ||
+                              "Address unavailable"}
                           </h3>
 
                           <p className="mt-1 text-sm text-slate-600">
@@ -688,7 +861,9 @@ export default function ChicagoMap() {
                           <span className="font-semibold">
                             Application:
                           </span>{" "}
-                          {formatDate(permit.applicationStartDate)}
+                          {formatDate(
+                            permit.applicationStartDate
+                          )}
                         </div>
 
                         <div>
@@ -716,8 +891,9 @@ export default function ChicagoMap() {
 
                   {permits.length > 25 && (
                     <p className="pt-2 text-center text-sm text-slate-500">
-                      Showing 25 of {permits.length.toLocaleString()}
-                      {" "}returned records.
+                      Showing 25 of{" "}
+                      {permits.length.toLocaleString()}{" "}
+                      returned records.
                     </p>
                   )}
                 </div>
