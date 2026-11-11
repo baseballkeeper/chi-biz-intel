@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -19,6 +18,7 @@ import type {
 import "leaflet/dist/leaflet.css";
 
 type Layer = "communities" | "neighborhoods";
+type Activity = "permits" | "businesses";
 
 type Properties = {
   community?: string;
@@ -51,6 +51,40 @@ type PermitResponse = {
   limited: boolean;
   permits: Permit[];
   error?: string;
+};
+
+type Business = {
+  licenseId: string;
+  licenseNumber: string;
+  businessName: string;
+  legalName: string;
+  address: string;
+  zipCode: string;
+  communityArea: string;
+  licenseType: string;
+  businessActivity: string;
+  applicationType: string;
+  dateIssued: string;
+  licenseStartDate: string;
+  licenseStatus: string;
+  latitude: number | null;
+  longitude: number | null;
+};
+
+type BusinessResponse = {
+  count: number;
+  matched?: number;
+  limited: boolean;
+  complete: boolean;
+  businesses: Business[];
+  error?: string;
+};
+
+type BusinessLocation = {
+  key: string;
+  latitude: number;
+  longitude: number;
+  businesses: Business[];
 };
 
 type PermitLocation = {
@@ -153,6 +187,7 @@ function MapController({
 
 export default function ChicagoMap() {
   const [layer, setLayer] = useState<Layer>("communities");
+  const [activity, setActivity] = useState<Activity>("permits");
   const [data, setData] = useState<AreaCollection | null>(null);
   const [selectedName, setSelectedName] = useState("");
   const [search, setSearch] = useState("");
@@ -166,6 +201,11 @@ export default function ChicagoMap() {
   const [permitError, setPermitError] = useState("");
   const [permitLimited, setPermitLimited] = useState(false);
   const [showMarkers, setShowMarkers] = useState(true);
+  const [businesses, setBusinesses] = useState<Business[]>([]);
+  const [businessCount, setBusinessCount] = useState(0);
+  const [businessLoading, setBusinessLoading] = useState(false);
+  const [businessError, setBusinessError] = useState("");
+  const [businessLimited, setBusinessLimited] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -245,7 +285,7 @@ export default function ChicagoMap() {
   useEffect(() => {
     const controller = new AbortController();
 
-    if (!selectedLocation) {
+    if (!selectedLocation || activity !== "permits") {
       setPermits([]);
       setPermitCount(0);
       setPermitLimited(false);
@@ -332,7 +372,59 @@ export default function ChicagoMap() {
     loadPermits();
 
     return () => controller.abort();
-  }, [layer, selectedLocation, communityArea, permitDays]);
+  }, [layer, selectedLocation, communityArea, permitDays, activity]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    if (!selectedLocation || activity !== "businesses") {
+      setBusinesses([]);
+      setBusinessCount(0);
+      setBusinessLimited(false);
+      setBusinessError("");
+      setBusinessLoading(false);
+      return () => controller.abort();
+    }
+
+    async function loadBusinesses() {
+      setBusinessLoading(true);
+      setBusinessError("");
+      setBusinesses([]);
+      setBusinessCount(0);
+      setBusinessLimited(false);
+      try {
+        const params = new URLSearchParams({ days: String(permitDays) });
+        if (layer === "communities") {
+          if (!communityArea) throw new Error("Community area number unavailable");
+          params.set("area", communityArea);
+        } else {
+          params.set("neighborhood", selectedLocation);
+        }
+        const response = await fetch(`/api/map-businesses?${params}`, {
+          signal: controller.signal,
+        });
+        const result = (await response.json()) as BusinessResponse;
+        if (!response.ok) {
+          throw new Error(result.error || `Business license request failed (${response.status})`);
+        }
+        if (!Array.isArray(result.businesses)) {
+          throw new Error("Invalid business license response");
+        }
+        if (!controller.signal.aborted) {
+          setBusinesses(result.businesses);
+          setBusinessCount(result.count);
+          setBusinessLimited(Boolean(result.limited) || !result.complete);
+        }
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setBusinessError(err instanceof Error ? err.message : "Could not load business licenses");
+        }
+      } finally {
+        if (!controller.signal.aborted) setBusinessLoading(false);
+      }
+    }
+    loadBusinesses();
+    return () => controller.abort();
+  }, [layer, selectedLocation, communityArea, permitDays, activity]);
 
   const matches = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -394,6 +486,33 @@ export default function ChicagoMap() {
   const unmappedPermitCount =
     permits.length - mappedPermitCount;
 
+  const businessLocations = useMemo(() => {
+    const groups = new Map<string, BusinessLocation>();
+    for (const business of businesses) {
+      const lat = business.latitude;
+      const lon = business.longitude;
+      if (typeof lat !== "number" || typeof lon !== "number" ||
+          !Number.isFinite(lat) || !Number.isFinite(lon) ||
+          lat < -90 || lat > 90 || lon < -180 || lon > 180) continue;
+      const key = `${lat.toFixed(6)},${lon.toFixed(6)}`;
+      const existing = groups.get(key);
+      if (existing) existing.businesses.push(business);
+      else groups.set(key, { key, latitude: lat, longitude: lon, businesses: [business] });
+    }
+    return Array.from(groups.values());
+  }, [businesses]);
+
+  const mappedBusinessCount = businessLocations.reduce(
+    (total, location) => total + location.businesses.length, 0
+  );
+  const unmappedBusinessCount = businesses.length - mappedBusinessCount;
+  const activeLoading = activity === "permits" ? permitLoading : businessLoading;
+  const activeError = activity === "permits" ? permitError : businessError;
+  const activeCount = activity === "permits" ? permitCount : businessCount;
+  const activeLimited = activity === "permits" ? permitLimited : businessLimited;
+  const activeMappedCount = activity === "permits" ? mappedPermitCount : mappedBusinessCount;
+  const activeLocationsCount = activity === "permits" ? permitLocations.length : businessLocations.length;
+
   function selectFeature(feature: AreaFeature) {
     const name = getName(feature, layer);
     setSelectedName(name);
@@ -407,6 +526,22 @@ export default function ChicagoMap() {
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-3">
+        <label htmlFor="activity-layer" className="text-sm font-semibold text-slate-800">
+          Activity layer
+        </label>
+        <select
+          id="activity-layer"
+          value={activity}
+          onChange={(event) => setActivity(event.target.value as Activity)}
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+        >
+          <option value="permits">Building permits</option>
+          <option value="businesses">Newly issued business licenses</option>
+        </select>
+        <span className="text-xs text-slate-500">One dataset at a time</span>
+      </div>
+
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex rounded-lg border border-slate-200 bg-white p-1">
           <button
@@ -510,33 +645,33 @@ export default function ChicagoMap() {
 
               <div className="mt-6 rounded-lg bg-blue-50 p-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
-                  Building permit activity
+                  {activity === "permits" ? "Building permit activity" : "Newly issued business licenses"}
                 </p>
 
                 <p className="mt-2 text-2xl font-bold text-slate-900">
-                  {permitLoading
+                  {activeLoading
                     ? "Loading..."
-                    : permitError
+                    : activeError
                       ? "Unavailable"
-                      : permitCount.toLocaleString()}
+                      : activeCount.toLocaleString()}
                 </p>
 
                 <p className="mt-1 text-xs text-slate-600">
                   {layer === "neighborhoods"
-                    ? "Geocoded permits matched to this neighborhood"
-                    : "Permit records returned for this community area"}
+                    ? `Geocoded ${activity === "permits" ? "permits" : "licenses"} matched to this neighborhood`
+                    : `${activity === "permits" ? "Permit" : "License"} records returned for this community area`}
                 </p>
 
-                {!permitLoading && !permitError && (
+                {!activeLoading && !activeError && (
                   <p className="mt-3 text-xs text-slate-600">
-                    {mappedPermitCount} permits at{" "}
-                    {permitLocations.length} mapped locations
+                    {activeMappedCount} records at{" "}
+                    {activeLocationsCount} mapped locations
                   </p>
                 )}
 
-                {permitLimited && (
+                {activeLimited && (
                   <p className="mt-2 text-xs text-amber-800">
-                    Results are limited to 500 records.
+                    Results may be incomplete due to query limits.
                   </p>
                 )}
               </div>
@@ -550,7 +685,7 @@ export default function ChicagoMap() {
                   }
                   className="h-4 w-4 accent-blue-700"
                 />
-                Show permit markers
+                Show {activity === "permits" ? "permit" : "business license"} markers
               </label>
             </div>
           ) : (
@@ -645,6 +780,7 @@ export default function ChicagoMap() {
 
             {selected &&
               showMarkers &&
+              activity === "permits" &&
               !permitLoading &&
               !permitError &&
               permitLocations.map((location) => (
@@ -728,11 +864,43 @@ export default function ChicagoMap() {
                   </Popup>
                 </CircleMarker>
               ))}
+            {selected && showMarkers && activity === "businesses" &&
+              !businessLoading && !businessError &&
+              businessLocations.map((location) => (
+                <CircleMarker
+                  key={`business-${selectedLocation}-${location.key}`}
+                  center={[location.latitude, location.longitude]}
+                  radius={location.businesses.length > 1 ? 9 : 7}
+                  pathOptions={{
+                    color: "#ffffff", weight: 2, fillColor: "#0d9488", fillOpacity: 0.9,
+                  }}
+                >
+                  <Popup maxWidth={330} minWidth={220}>
+                    <div className="space-y-3">
+                      <strong className="text-sm">{location.businesses[0].address || "Address unavailable"}</strong>
+                      <p className="text-xs text-slate-600">
+                        {location.businesses.length} {location.businesses.length === 1 ? "license" : "licenses"} at this location
+                      </p>
+                      <div className="max-h-64 space-y-3 overflow-y-auto">
+                        {location.businesses.map((business, index) => (
+                          <div key={`${business.licenseId}-${index}`} className="border-t border-slate-200 pt-2">
+                            <p className="text-xs font-semibold">{business.businessName}</p>
+                            <p className="mt-1 text-xs"><strong>License:</strong> {business.licenseType || "Not available"}</p>
+                            <p className="mt-1 text-xs"><strong>Issued:</strong> {formatDate(business.dateIssued)}</p>
+                            <p className="mt-1 text-xs"><strong>License number:</strong> {business.licenseNumber || "Not available"}</p>
+                            {business.businessActivity && <p className="mt-2 text-xs leading-5">{business.businessActivity}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </Popup>
+                </CircleMarker>
+              ))}
           </MapContainer>
         </div>
       </div>
 
-      {selected && (
+      {selected && activity === "permits" && (
         <section className="rounded-xl border border-slate-200 bg-white p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -902,6 +1070,67 @@ export default function ChicagoMap() {
           )}
         </section>
       )}
+      {selected && activity === "businesses" && (
+        <section className="rounded-xl border border-slate-200 bg-white p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Geographic Activity Intelligence</p>
+              <h2 className="mt-2 text-2xl font-bold text-slate-900">Business Licenses — {selectedLocation}</h2>
+              <p className="mt-2 text-sm text-slate-600">
+                Newly issued licenses are not necessarily new business openings.
+                {layer === "neighborhoods" && " Neighborhood matching requires usable coordinates."}
+              </p>
+            </div>
+            <div>
+              <label htmlFor="business-period" className="mb-2 block text-xs font-semibold text-slate-700">Activity period</label>
+              <select id="business-period" value={permitDays}
+                onChange={(event) => setPermitDays(Number(event.target.value))}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900">
+                <option value={7}>Last 7 days</option>
+                <option value={30}>Last 30 days</option>
+                <option value={90}>Last 90 days</option>
+                <option value={180}>Last 180 days</option>
+                <option value={365}>Last 365 days</option>
+              </select>
+            </div>
+          </div>
+          {businessLoading && <p className="mt-6 text-sm text-slate-600">Loading business licenses...</p>}
+          {businessError && <div className="mt-6 rounded-lg bg-red-50 p-4 text-sm text-red-700">{businessError}</div>}
+          {!businessLoading && !businessError && (
+            <>
+              <div className="mt-6 rounded-lg bg-slate-50 p-4">
+                <p className="text-sm font-semibold text-slate-900">{businessCount.toLocaleString()} newly issued license records</p>
+                <p className="mt-1 text-xs text-slate-600">
+                  {mappedBusinessCount} licenses at {businessLocations.length} mapped locations.
+                  {unmappedBusinessCount > 0 && ` ${unmappedBusinessCount} records lack usable coordinates.`}
+                </p>
+                {businessLimited && <p className="mt-2 text-xs font-medium text-amber-800">Results may be incomplete due to query limits. Counts represent returned records only.</p>}
+              </div>
+              {businesses.length === 0 ? (
+                <p className="mt-6 text-sm text-slate-600">No newly issued licenses returned for this area and period.</p>
+              ) : (
+                <div className="mt-6 space-y-3">
+                  {businesses.slice(0, 25).map((business, index) => (
+                    <article key={`${business.licenseId}-${index}`} className="rounded-xl border border-slate-200 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <h3 className="font-semibold text-slate-900">{business.businessName || "Business name unavailable"}</h3>
+                          <p className="mt-1 text-sm text-slate-600">{business.address || "Address unavailable"}</p>
+                        </div>
+                        <span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-medium text-teal-800">{business.licenseType || "License"}</span>
+                      </div>
+                      <p className="mt-3 text-xs text-slate-600">Issued: {formatDate(business.dateIssued)} · License: {business.licenseNumber || "Not available"}</p>
+                      {business.businessActivity && <p className="mt-2 text-sm leading-6 text-slate-600">{business.businessActivity}</p>}
+                    </article>
+                  ))}
+                  {businesses.length > 25 && <p className="pt-2 text-center text-sm text-slate-500">Showing 25 of {businesses.length} returned license records.</p>}
+                </div>
+              )}
+            </>
+          )}
+        </section>
+      )}
+
     </div>
   );
 }
