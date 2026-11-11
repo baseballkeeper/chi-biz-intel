@@ -1,4 +1,5 @@
 
+
 const tools = [
   {
     title: "Neighborhood Explorer",
@@ -24,14 +25,19 @@ const tools = [
     category: "Business Intelligence",
     action: "Explore businesses",
   },
-]
-
-const upcoming = [
   {
     title: "Building Violations",
     description:
-      "Explore building code violations and property maintenance activity.",
+      "Explore reported building code violations, inspection findings, and property maintenance issues across Chicago.",
+    href: "/violations",
+    category: "Property Intelligence",
+    action: "Explore violations",
   },
+]
+
+
+
+const upcoming = [
   {
     title: "Restaurant Intelligence",
     description:
