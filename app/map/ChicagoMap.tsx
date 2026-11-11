@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   GeoJSON,
   MapContainer,
+  TileLayer,
   useMap,
 } from "react-leaflet";
 import L from "leaflet";
@@ -96,10 +97,11 @@ function getCommunityArea(
 function formatDate(value: string): string {
   if (!value) return "Not available";
 
-  const date = value.slice(0, 10);
-  const parts = date.split("-");
+  const parts = value.slice(0, 10).split("-");
 
-  if (parts.length !== 3) return date;
+  if (parts.length !== 3) {
+    return value.slice(0, 10);
+  }
 
   return `${parts[1]}/${parts[2]}/${parts[0]}`;
 }
@@ -143,7 +145,7 @@ function MapController({
     if (bounds.isValid()) {
       map.fitBounds(bounds, {
         padding: [60, 60],
-        maxZoom: 13,
+        maxZoom: 14,
       });
     }
   }, [map, selected]);
@@ -321,7 +323,6 @@ export default function ChicagoMap() {
 
   function selectFeature(feature: AreaFeature) {
     const name = getName(feature, layer);
-
     setSelectedName(name);
     setSearch(name);
   }
@@ -497,13 +498,19 @@ export default function ChicagoMap() {
             center={CHICAGO_CENTER}
             zoom={10}
             zoomControl={true}
-            attributionControl={false}
+            attributionControl={true}
             style={{
               height: "620px",
               width: "100%",
               background: "#e8f0f7",
             }}
           >
+            <TileLayer
+              url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              maxZoom={19}
+            />
+
             <MapController data={data} selected={selected} />
 
             {data && (
@@ -528,7 +535,7 @@ export default function ChicagoMap() {
                       : layer === "communities"
                         ? "#93c5fd"
                         : "#86efac",
-                    fillOpacity: isSelected ? 0.65 : 0.45,
+                    fillOpacity: isSelected ? 0.22 : 0.06,
                   };
                 }}
                 onEachFeature={(feature, leafletLayer) => {
