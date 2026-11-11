@@ -18,7 +18,7 @@ import type {
 import "leaflet/dist/leaflet.css";
 
 type Layer = "communities" | "neighborhoods";
-type Activity = "permits" | "businesses";
+type Activity = "permits" | "businesses" | "inspections";
 
 type Properties = {
   community?: string;
@@ -79,6 +79,59 @@ type BusinessResponse = {
   businesses: Business[];
   error?: string;
 };
+
+type Inspection = {
+  id: string;
+  businessName: string;
+  alternateName: string;
+  licenseNumber: string;
+  facilityType: string;
+  risk: string;
+  address: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  date: string;
+  inspectionType: string;
+  result: string;
+  violations: string;
+  latitude: number | null;
+  longitude: number | null;
+};
+
+type InspectionResponse = {
+  count: number;
+  returned: number;
+  limited: boolean;
+  complete: boolean;
+  inspections: Inspection[];
+  error?: string;
+};
+
+type InspectionLocation = {
+  key: string;
+  latitude: number;
+  longitude: number;
+  inspections: Inspection[];
+};
+
+function inspectionColor(result: string): string {
+  switch (result.toLowerCase()) {
+    case "pass": return "#16a34a";
+    case "fail": return "#dc2626";
+    case "pass w/ conditions": return "#d97706";
+    default: return "#64748b";
+  }
+}
+
+function inspectionBadge(result: string): string {
+  switch (result.toLowerCase()) {
+    case "pass": return "bg-green-50 text-green-800";
+    case "fail": return "bg-red-50 text-red-800";
+    case "pass w/ conditions": return "bg-amber-50 text-amber-800";
+    default: return "bg-slate-100 text-slate-700";
+  }
+}
 
 type BusinessLocation = {
   key: string;
@@ -206,6 +259,12 @@ export default function ChicagoMap() {
   const [businessLoading, setBusinessLoading] = useState(false);
   const [businessError, setBusinessError] = useState("");
   const [businessLimited, setBusinessLimited] = useState(false);
+
+  const [inspections, setInspections] = useState<Inspection[]>([]);
+  const [inspectionCount, setInspectionCount] = useState(0);
+  const [inspectionLoading, setInspectionLoading] = useState(false);
+  const [inspectionError, setInspectionError] = useState("");
+  const [inspectionLimited, setInspectionLimited] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -426,6 +485,58 @@ export default function ChicagoMap() {
     return () => controller.abort();
   }, [layer, selectedLocation, communityArea, permitDays, activity]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    if (!selectedLocation || activity !== "inspections") {
+      setInspections([]);
+      setInspectionCount(0);
+      setInspectionLimited(false);
+      setInspectionError("");
+      setInspectionLoading(false);
+      return () => controller.abort();
+    }
+
+    async function loadInspections() {
+      setInspectionLoading(true);
+      setInspectionError("");
+      setInspections([]);
+      setInspectionCount(0);
+      setInspectionLimited(false);
+      try {
+        const params = new URLSearchParams({ days: String(permitDays) });
+        if (layer === "communities") {
+          if (!communityArea) throw new Error("Community area number unavailable");
+          params.set("area", communityArea);
+        } else {
+          params.set("neighborhood", selectedLocation);
+        }
+        const response = await fetch(`/api/map-inspections?${params}`, {
+          signal: controller.signal,
+        });
+        const result = (await response.json()) as InspectionResponse;
+        if (!response.ok) {
+          throw new Error(result.error || `Food inspection request failed (${response.status})`);
+        }
+        if (!Array.isArray(result.inspections)) {
+          throw new Error("Invalid food inspection response");
+        }
+        if (!controller.signal.aborted) {
+          setInspections(result.inspections);
+          setInspectionCount(result.count);
+          setInspectionLimited(Boolean(result.limited) || !result.complete);
+        }
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setInspectionError(err instanceof Error ? err.message : "Could not load food inspections");
+        }
+      } finally {
+        if (!controller.signal.aborted) setInspectionLoading(false);
+      }
+    }
+    loadInspections();
+    return () => controller.abort();
+  }, [layer, selectedLocation, communityArea, permitDays, activity]);
+
   const matches = useMemo(() => {
     const query = search.trim().toLowerCase();
 
@@ -506,12 +617,36 @@ export default function ChicagoMap() {
     (total, location) => total + location.businesses.length, 0
   );
   const unmappedBusinessCount = businesses.length - mappedBusinessCount;
-  const activeLoading = activity === "permits" ? permitLoading : businessLoading;
-  const activeError = activity === "permits" ? permitError : businessError;
-  const activeCount = activity === "permits" ? permitCount : businessCount;
-  const activeLimited = activity === "permits" ? permitLimited : businessLimited;
-  const activeMappedCount = activity === "permits" ? mappedPermitCount : mappedBusinessCount;
-  const activeLocationsCount = activity === "permits" ? permitLocations.length : businessLocations.length;
+  const inspectionLocations = useMemo(() => {
+    const groups = new Map<string, InspectionLocation>();
+    for (const inspection of inspections) {
+      const lat = inspection.latitude;
+      const lon = inspection.longitude;
+      if (typeof lat !== "number" || typeof lon !== "number" ||
+          !Number.isFinite(lat) || !Number.isFinite(lon) ||
+          lat < -90 || lat > 90 || lon < -180 || lon > 180) continue;
+      const key = `${lat.toFixed(6)},${lon.toFixed(6)}`;
+      const existing = groups.get(key);
+      if (existing) existing.inspections.push(inspection);
+      else groups.set(key, { key, latitude: lat, longitude: lon, inspections: [inspection] });
+    }
+    return Array.from(groups.values());
+  }, [inspections]);
+
+  const mappedInspectionCount = inspectionLocations.reduce(
+    (total, location) => total + location.inspections.length, 0
+  );
+  const inspectionResults = useMemo(() => ({
+    passed: inspections.filter((item) => item.result === "Pass").length,
+    failed: inspections.filter((item) => item.result === "Fail").length,
+    conditional: inspections.filter((item) => item.result === "Pass w/ Conditions").length,
+  }), [inspections]);
+  const activeLoading = activity === "permits" ? permitLoading : activity === "businesses" ? businessLoading : inspectionLoading;
+  const activeError = activity === "permits" ? permitError : activity === "businesses" ? businessError : inspectionError;
+  const activeCount = activity === "permits" ? permitCount : activity === "businesses" ? businessCount : inspectionCount;
+  const activeLimited = activity === "permits" ? permitLimited : activity === "businesses" ? businessLimited : inspectionLimited;
+  const activeMappedCount = activity === "permits" ? mappedPermitCount : activity === "businesses" ? mappedBusinessCount : mappedInspectionCount;
+  const activeLocationsCount = activity === "permits" ? permitLocations.length : activity === "businesses" ? businessLocations.length : inspectionLocations.length;
 
   function selectFeature(feature: AreaFeature) {
     const name = getName(feature, layer);
@@ -538,6 +673,7 @@ export default function ChicagoMap() {
         >
           <option value="permits">Building permits</option>
           <option value="businesses">Newly issued business licenses</option>
+          <option value="inspections">Food inspections</option>
         </select>
         <span className="text-xs text-slate-500">One dataset at a time</span>
       </div>
@@ -645,7 +781,7 @@ export default function ChicagoMap() {
 
               <div className="mt-6 rounded-lg bg-blue-50 p-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
-                  {activity === "permits" ? "Building permit activity" : "Newly issued business licenses"}
+                  {activity === "permits" ? "Building permit activity" : activity === "businesses" ? "Newly issued business licenses" : "Food inspections"}
                 </p>
 
                 <p className="mt-2 text-2xl font-bold text-slate-900">
@@ -658,8 +794,8 @@ export default function ChicagoMap() {
 
                 <p className="mt-1 text-xs text-slate-600">
                   {layer === "neighborhoods"
-                    ? `Geocoded ${activity === "permits" ? "permits" : "licenses"} matched to this neighborhood`
-                    : `${activity === "permits" ? "Permit" : "License"} records returned for this community area`}
+                    ? `Geocoded ${activity === "permits" ? "permits" : activity === "businesses" ? "licenses" : "inspections"} matched to this neighborhood`
+                    : `${activity === "permits" ? "Permit" : activity === "businesses" ? "License" : "Inspection"} records matched to this community area`}
                 </p>
 
                 {!activeLoading && !activeError && (
@@ -685,7 +821,7 @@ export default function ChicagoMap() {
                   }
                   className="h-4 w-4 accent-blue-700"
                 />
-                Show {activity === "permits" ? "permit" : "business license"} markers
+                Show {activity === "permits" ? "permit" : activity === "businesses" ? "business license" : "inspection"} markers
               </label>
             </div>
           ) : (
@@ -703,8 +839,10 @@ export default function ChicagoMap() {
 
           <div className="mt-6 rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-600">
             {layer === "communities"
-              ? "Official Chicago community areas. Permit activity uses the city's community area assignments."
-              : "Approximate Chicago neighborhood boundaries. Permit activity uses coordinate-based matching and excludes records without usable coordinates."}
+              ? activity === "permits"
+                ? "Official Chicago community areas. Permit activity uses the city's community area assignments."
+                : "Official Chicago community area boundaries. Activity is matched using available coordinates."
+              : "Approximate Chicago neighborhood boundaries. Activity uses coordinate-based matching and excludes records without usable coordinates."}
           </div>
         </aside>
 
@@ -896,6 +1034,50 @@ export default function ChicagoMap() {
                   </Popup>
                 </CircleMarker>
               ))}
+            {selected && showMarkers && activity === "inspections" &&
+              !inspectionLoading && !inspectionError &&
+              inspectionLocations.map((location) => {
+                const latest = location.inspections[0];
+                return (
+                  <CircleMarker
+                    key={`inspection-${selectedLocation}-${location.key}`}
+                    center={[location.latitude, location.longitude]}
+                    radius={location.inspections.length > 1 ? 9 : 7}
+                    pathOptions={{
+                      color: "#ffffff", weight: 2,
+                      fillColor: inspectionColor(latest.result), fillOpacity: 0.9,
+                    }}
+                  >
+                    <Popup maxWidth={350} minWidth={230}>
+                      <div className="space-y-3">
+                        <strong className="text-sm">{latest.address || "Address unavailable"}</strong>
+                        <p className="text-xs text-slate-600">
+                          {location.inspections.length} {location.inspections.length === 1 ? "inspection" : "inspections"} at this location
+                        </p>
+                        <p className="text-xs text-slate-500">Marker color reflects the most recent returned inspection at this location.</p>
+                        <div className="max-h-64 space-y-3 overflow-y-auto">
+                          {location.inspections.map((inspection, index) => (
+                            <div key={`${inspection.id}-${index}`} className="border-t border-slate-200 pt-2">
+                              <p className="text-xs font-semibold">{inspection.businessName}</p>
+                              <span className={`mt-1 inline-block rounded-full px-2 py-1 text-xs font-medium ${inspectionBadge(inspection.result)}`}>
+                                {inspection.result || "Result unavailable"}
+                              </span>
+                              <p className="mt-1 text-xs"><strong>Inspected:</strong> {formatDate(inspection.date)}</p>
+                              <p className="mt-1 text-xs"><strong>Type:</strong> {inspection.inspectionType || "Not available"}</p>
+                              {inspection.violations && (
+                                <details className="mt-2 text-xs">
+                                  <summary className="cursor-pointer font-semibold">View violation details</summary>
+                                  <p className="mt-2 max-h-36 overflow-y-auto whitespace-pre-wrap leading-5">{inspection.violations}</p>
+                                </details>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </Popup>
+                  </CircleMarker>
+                );
+              })}
           </MapContainer>
         </div>
       </div>
@@ -1124,6 +1306,92 @@ export default function ChicagoMap() {
                     </article>
                   ))}
                   {businesses.length > 25 && <p className="pt-2 text-center text-sm text-slate-500">Showing 25 of {businesses.length} returned license records.</p>}
+                </div>
+              )}
+            </>
+          )}
+        </section>
+      )}
+
+      {selected && activity === "inspections" && (
+        <section className="rounded-xl border border-slate-200 bg-white p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Geographic Activity Intelligence</p>
+              <h2 className="mt-2 text-2xl font-bold text-slate-900">Food Inspections — {selectedLocation}</h2>
+              <p className="mt-2 text-sm text-slate-600">
+                Each result describes an individual inspection, not necessarily the business&apos;s current condition.
+                Only inspections with usable coordinates inside the selected boundary are included.
+              </p>
+            </div>
+            <div>
+              <label htmlFor="inspection-period" className="mb-2 block text-xs font-semibold text-slate-700">Activity period</label>
+              <select id="inspection-period" value={permitDays}
+                onChange={(event) => setPermitDays(Number(event.target.value))}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900">
+                <option value={7}>Last 7 days</option>
+                <option value={30}>Last 30 days</option>
+                <option value={90}>Last 90 days</option>
+                <option value={180}>Last 180 days</option>
+                <option value={365}>Last 365 days</option>
+              </select>
+            </div>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-4 text-xs text-slate-600">
+            <span className="flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-green-600" /> Pass</span>
+            <span className="flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-red-600" /> Fail</span>
+            <span className="flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-amber-600" /> Pass w/ Conditions</span>
+            <span className="flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-slate-500" /> Other</span>
+          </div>
+          {inspectionLoading && <p className="mt-6 text-sm text-slate-600">Loading food inspections...</p>}
+          {inspectionError && <div className="mt-6 rounded-lg bg-red-50 p-4 text-sm text-red-700">{inspectionError}</div>}
+          {!inspectionLoading && !inspectionError && (
+            <>
+              <div className="mt-6 rounded-lg bg-slate-50 p-4">
+                <p className="text-sm font-semibold text-slate-900">{inspectionCount.toLocaleString()} matching inspection records</p>
+                <p className="mt-2 text-xs text-slate-600">
+                  {inspectionResults.passed} passed · {inspectionResults.failed} failed · {inspectionResults.conditional} passed with conditions
+                </p>
+                <p className="mt-2 text-xs text-slate-600">
+                  {mappedInspectionCount} returned inspections at {inspectionLocations.length} mapped locations.
+                </p>
+                {inspectionLimited && (
+                  <p className="mt-2 text-xs font-medium text-amber-800">
+                    Only the first {inspections.length.toLocaleString()} matching inspections are available to display. The total count includes all matching inspections.
+                    Result breakdowns and markers reflect returned records only.
+                  </p>
+                )}
+              </div>
+              {inspections.length === 0 ? (
+                <p className="mt-6 text-sm text-slate-600">No food inspections returned for this area and period.</p>
+              ) : (
+                <div className="mt-6 space-y-3">
+                  {inspections.slice(0, 25).map((inspection, index) => (
+                    <article key={`${inspection.id}-${index}`} className="rounded-xl border border-slate-200 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <h3 className="font-semibold text-slate-900">{inspection.businessName || "Business name unavailable"}</h3>
+                          <p className="mt-1 text-sm text-slate-600">{inspection.address || "Address unavailable"}</p>
+                        </div>
+                        <span className={`rounded-full px-3 py-1 text-xs font-medium ${inspectionBadge(inspection.result)}`}>
+                          {inspection.result || "Result unavailable"}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-xs text-slate-600">
+                        Inspected: {formatDate(inspection.date)} · {inspection.inspectionType || "Inspection type unavailable"}
+                      </p>
+                      {inspection.facilityType && <p className="mt-2 text-xs text-slate-600">Facility: {inspection.facilityType}</p>}
+                      {inspection.violations && (
+                        <details className="mt-3 text-sm text-slate-600">
+                          <summary className="cursor-pointer font-medium text-slate-800">View inspection violations</summary>
+                          <p className="mt-2 whitespace-pre-wrap leading-6">{inspection.violations}</p>
+                        </details>
+                      )}
+                    </article>
+                  ))}
+                  {inspections.length > 25 && (
+                    <p className="pt-2 text-center text-sm text-slate-500">Showing 25 of {inspections.length.toLocaleString()} returned inspection records.</p>
+                  )}
                 </div>
               )}
             </>
