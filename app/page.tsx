@@ -1,10 +1,9 @@
 
-
 const tools = [
   {
     title: "Neighborhood Explorer",
     description:
-      "Compare Chicago neighborhoods using business density, population, and local market indicators.",
+      "Compare Chicago community areas using business density, population, and local market indicators.",
     href: "/dashboard",
     category: "Market Research",
     action: "Explore neighborhoods",
@@ -33,18 +32,23 @@ const tools = [
     category: "Property Intelligence",
     action: "Explore violations",
   },
-{
-  title: "Food Inspection Activity",
-  description:
-    "Explore food safety inspection results, facility risk classifications, and documented violations across Chicago.",
-  href: "/inspections",
-  category: "Food Safety & Inspections",
-  action: "Explore inspections",
-},
-
-]
-
-
+  {
+    title: "Food Inspection Activity",
+    description:
+      "Explore food safety inspection results, facility risk classifications, and documented violations across Chicago.",
+    href: "/inspections",
+    category: "Food Safety & Inspections",
+    action: "Explore inspections",
+  },
+  {
+    title: "Chicago Geographic Explorer",
+    description:
+      "Explore Chicago's 77 official community areas and 98 approximate neighborhoods on an interactive map. Search, zoom, and inspect geographic boundaries.",
+    href: "/map",
+    category: "Geographic Intelligence",
+    action: "Explore the map",
+  },
+];
 
 const upcoming = [
   {
@@ -52,8 +56,7 @@ const upcoming = [
     description:
       "Explore additional indicators and changes across Chicago neighborhoods.",
   },
-]
-
+];
 
 export default function Home() {
   return (
@@ -61,14 +64,18 @@ export default function Home() {
       <section className="border-b border-slate-200 bg-slate-50">
         <div className="mx-auto max-w-6xl px-6 py-20">
           <div className="max-w-4xl">
+            <p className="mb-5 text-sm font-semibold uppercase tracking-widest text-blue-700">
+              MetroSift / Chicago
+            </p>
+
             <h1 className="text-4xl font-bold tracking-tight sm:text-6xl">
               Understand what&apos;s happening across Chicago.
             </h1>
 
             <p className="mt-6 max-w-3xl text-lg leading-8 text-slate-600">
               Explore business activity, construction permits,
-              neighborhood trends, and other local intelligence
-              in one place.
+              neighborhood trends, geographic boundaries,
+              and other local intelligence in one place.
             </p>
 
             <p className="mt-4 max-w-3xl text-slate-600">
@@ -83,6 +90,13 @@ export default function Home() {
                 className="rounded-lg bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
               >
                 Explore tools
+              </a>
+
+              <a
+                href="/map"
+                className="rounded-lg border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-100"
+              >
+                Explore Chicago map
               </a>
             </div>
           </div>
@@ -101,7 +115,7 @@ export default function Home() {
           <p className="mt-3 max-w-2xl text-slate-600">
             Choose a tool to explore public data.
             Each tool focuses on a different part of
-            Chicago&apos;s business and neighborhood activity.
+            Chicago&apos;s business, property, and neighborhood activity.
           </p>
         </div>
 
@@ -127,7 +141,7 @@ export default function Home() {
               </p>
 
               <div className="mt-6 text-sm font-semibold text-blue-700 group-hover:text-blue-900">
-                {tool.action} →
+                {tool.action} &rarr;
               </div>
             </a>
           ))}
@@ -199,12 +213,16 @@ export default function Home() {
           <div className="grid gap-10 md:grid-cols-2">
             <div>
               <h2 className="text-xl font-bold">
-                Chicago Business Intelligence
+                MetroSift
               </h2>
 
+              <p className="mt-2 text-sm font-medium text-slate-300">
+                Find the signal in your city.
+              </p>
+
               <p className="mt-4 max-w-md text-sm leading-7 text-slate-300">
-                A resource for exploring Chicago business,
-                property, and neighborhood information
+                A resource for exploring business,
+                property, and neighborhood intelligence
                 through publicly available data.
               </p>
 
@@ -232,22 +250,22 @@ export default function Home() {
                 rel="noopener noreferrer"
                 className="mt-4 inline-block text-sm font-medium text-white underline decoration-slate-500 underline-offset-4 hover:decoration-white"
               >
-                Visit the City of Chicago Open Data Portal ↗
+                Visit the City of Chicago Open Data Portal &nearr;
               </a>
             </div>
           </div>
 
           <div className="mt-10 border-t border-slate-700 pt-6">
             <p className="text-xs leading-6 text-slate-400">
-              Chicago Business Intelligence is an independent
-              resource and is not affiliated with or endorsed
-              by the City of Chicago. Public datasets may
-              contain errors, omissions, or reporting delays.
-              Refer to the original source for official records.
+              MetroSift is an independent resource and is not
+              affiliated with or endorsed by the City of Chicago.
+              Public datasets may contain errors, omissions,
+              or reporting delays. Refer to the original source
+              for official records.
             </p>
           </div>
         </div>
       </footer>
     </main>
-  )
+  );
 }
