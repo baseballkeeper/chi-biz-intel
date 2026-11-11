@@ -1,252 +1,242 @@
+
+const tools = [
+  {
+    title: "Neighborhood Explorer",
+    description:
+      "Compare Chicago neighborhoods using business density, population, and local market indicators.",
+    href: "/dashboard",
+    category: "Market Research",
+    action: "Explore neighborhoods",
+  },
+  {
+    title: "Building Permits",
+    description:
+      "Discover recent construction, renovations, and development activity across Chicago.",
+    href: "/permits",
+    category: "Construction Activity",
+    action: "Explore permits",
+  },
+  {
+    title: "New Business Activity",
+    description:
+      "Find recently issued initial business licenses, business locations, and commercial activity.",
+    href: "/businesses",
+    category: "Business Intelligence",
+    action: "Explore businesses",
+  },
+]
+
+const upcoming = [
+  {
+    title: "Building Violations",
+    description:
+      "Explore building code violations and property maintenance activity.",
+  },
+  {
+    title: "Restaurant Intelligence",
+    description:
+      "Research food inspection results and restaurant activity.",
+  },
+  {
+    title: "Neighborhood Trends",
+    description:
+      "Explore additional indicators and changes across Chicago neighborhoods.",
+  },
+]
+
 export default function Home() {
   return (
     <main className="min-h-screen bg-white text-slate-900">
       <section className="border-b border-slate-200 bg-slate-50">
         <div className="mx-auto max-w-6xl px-6 py-20">
-          <div className="max-w-3xl">
-            <div className="mb-4 inline-flex rounded-full border border-slate-300 bg-white px-3 py-1 text-sm font-medium text-slate-600">
-              Chicago market intelligence for site selection
-            </div>
-
-            <h1 className="text-5xl font-bold tracking-tight text-slate-900 sm:text-6xl">
-              Find the best Chicago neighborhoods to open your next business.
+          <div className="max-w-4xl">
+            <h1 className="text-4xl font-bold tracking-tight sm:text-6xl">
+              Understand what&apos;s happening across Chicago.
             </h1>
 
-            <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">
-              A decision platform for brokers, franchise operators, restaurant
-              groups, and investors. Identify underserved neighborhoods using
-              business licenses, population, demographics, and other local market
-              signals.
+            <p className="mt-6 max-w-3xl text-lg leading-8 text-slate-600">
+              Explore business activity, construction permits,
+              neighborhood trends, and other local intelligence
+              in one place.
             </p>
 
-            <div className="mt-8 flex flex-wrap gap-4">
+            <p className="mt-4 max-w-3xl text-slate-600">
+              Built for entrepreneurs, contractors, investors,
+              researchers, and anyone making decisions using
+              Chicago public data.
+            </p>
+
+            <div className="mt-8 flex flex-wrap gap-3">
               <a
-                href="/dashboard"
+                href="#tools"
                 className="rounded-lg bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
               >
-                View dashboard
+                Explore tools
               </a>
-<a
-  href="/permits"
-  className="rounded-lg border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
->
-  View permit activity
-</a>
-              <a
-                href="#reports"
-                className="rounded-lg border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
-              >
-                Explore reports
-              </a>
-            </div>
-
-            <div className="mt-8 flex flex-wrap gap-6 text-sm text-slate-500">
-              <span>Built for retail brokers</span>
-              <span>Franchise expansion teams</span>
-              <span>Restaurant groups</span>
-              <span>Investors</span>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-6 py-16">
+      <section
+        id="tools"
+        className="mx-auto max-w-6xl px-6 py-16"
+      >
+        <div className="mb-8">
+          <h2 className="text-3xl font-bold tracking-tight">
+            Explore Chicago
+          </h2>
+
+          <p className="mt-3 max-w-2xl text-slate-600">
+            Choose a tool to explore public data.
+            Each tool focuses on a different part of
+            Chicago&apos;s business and neighborhood activity.
+          </p>
+        </div>
+
         <div className="grid gap-6 md:grid-cols-3">
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold">Spot underserved markets</h2>
-            <p className="mt-3 text-sm leading-7 text-slate-600">
-              Compare business density against local population to quickly find
-              neighborhoods with lower competition and higher potential.
-            </p>
-          </div>
+          {tools.map((tool) => (
+            <a
+              key={tool.href}
+              href={tool.href}
+              className="group flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-slate-400 hover:shadow-md"
+            >
+              <div className="mb-5">
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                  {tool.category}
+                </span>
+              </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold">Move faster on site selection</h2>
-            <p className="mt-3 text-sm leading-7 text-slate-600">
-              Replace hours of manual research with a single view of Chicago
-              neighborhoods, business presence, and demand indicators.
-            </p>
-          </div>
+              <h3 className="text-xl font-semibold">
+                {tool.title}
+              </h3>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold">Turn data into decisions</h2>
-            <p className="mt-3 text-sm leading-7 text-slate-600">
-              Use data-backed neighborhood rankings to support expansion plans,
-              leasing conversations, and investment memos.
-            </p>
-          </div>
+              <p className="mt-3 flex-1 text-sm leading-7 text-slate-600">
+                {tool.description}
+              </p>
+
+              <div className="mt-6 text-sm font-semibold text-blue-700 group-hover:text-blue-900">
+                {tool.action} →
+              </div>
+            </a>
+          ))}
         </div>
       </section>
 
       <section className="border-y border-slate-200 bg-slate-50">
         <div className="mx-auto max-w-6xl px-6 py-16">
-          <div className="max-w-2xl">
-            <h2 className="text-3xl font-bold tracking-tight">
-              What this helps you answer
-            </h2>
-            <p className="mt-4 text-slate-600">
-              Instead of guessing, use local data to answer the questions that
-              matter before signing a lease or underwriting a location.
-            </p>
-          </div>
+          <h2 className="text-3xl font-bold tracking-tight">
+            What can you discover?
+          </h2>
 
-          <div className="mt-10 grid gap-6 md:grid-cols-2">
-            <div className="rounded-2xl border border-slate-200 bg-white p-6">
-              <ul className="space-y-4 text-sm leading-7 text-slate-700">
-                <li>Where should I open a coffee shop in Chicago?</li>
-                <li>Which neighborhoods look underserved for gyms?</li>
-                <li>Where is competition high relative to population?</li>
-                <li>Which areas deserve a closer look before touring sites?</li>
-              </ul>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-white p-6">
-              <ul className="space-y-4 text-sm leading-7 text-slate-700">
-                <li>Which neighborhoods have room for new retail concepts?</li>
-                <li>How can I support a tenant recommendation with data?</li>
-                <li>Where should a franchise operator start market research?</li>
-                <li>Which submarkets look promising for deeper analysis?</li>
-              </ul>
-            </div>
+          <div className="mt-8 grid gap-6 md:grid-cols-2">
+            {[
+              "Which neighborhoods have fewer competing businesses?",
+              "Where are new businesses receiving licenses?",
+              "What construction projects are being permitted?",
+              "Which areas are experiencing commercial activity?",
+              "Where could new investment opportunities emerge?",
+              "How are Chicago neighborhoods changing?",
+            ].map((question) => (
+              <div
+                key={question}
+                className="rounded-xl border border-slate-200 bg-white p-5 text-sm font-medium text-slate-700"
+              >
+                {question}
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
       <section className="mx-auto max-w-6xl px-6 py-16">
-        <div className="grid gap-8 lg:grid-cols-2 lg:items-start">
-          <div>
-            <h2 className="text-3xl font-bold tracking-tight">
-              Designed for people making real location decisions
-            </h2>
-            <p className="mt-4 max-w-xl text-slate-600">
-              This is not generic demographic data. It is focused market
-              intelligence for people trying to decide where a business should go
-              next.
-            </p>
-          </div>
+        <div className="mb-8">
+          <h2 className="text-3xl font-bold tracking-tight">
+            More Chicago data to explore
+          </h2>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="rounded-2xl border border-slate-200 p-5">
-              <h3 className="font-semibold">Commercial real estate brokers</h3>
-              <p className="mt-2 text-sm leading-6 text-slate-600">
-                Support tenant recommendations with faster, clearer neighborhood
-                analysis.
+          <p className="mt-3 text-slate-600">
+            Additional public datasets and research tools
+            are being evaluated for inclusion.
+          </p>
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-3">
+          {upcoming.map((item) => (
+            <div
+              key={item.title}
+              className="rounded-2xl border border-slate-200 bg-slate-50 p-6"
+            >
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Planned
+              </span>
+
+              <h3 className="mt-3 text-lg font-semibold">
+                {item.title}
+              </h3>
+
+              <p className="mt-3 text-sm leading-7 text-slate-600">
+                {item.description}
               </p>
             </div>
-
-            <div className="rounded-2xl border border-slate-200 p-5">
-              <h3 className="font-semibold">Franchise operators</h3>
-              <p className="mt-2 text-sm leading-6 text-slate-600">
-                Identify promising submarkets before spending time on full site
-                selection.
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 p-5">
-              <h3 className="font-semibold">Restaurant groups</h3>
-              <p className="mt-2 text-sm leading-6 text-slate-600">
-                Explore neighborhoods with favorable demand and manageable
-                competitive density.
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 p-5">
-              <h3 className="font-semibold">Investors and developers</h3>
-              <p className="mt-2 text-sm leading-6 text-slate-600">
-                Surface market gaps worth underwriting, validating, or packaging
-                into reports.
-              </p>
-            </div>
-          </div>
+          ))}
         </div>
       </section>
 
-      <section id="reports" className="border-y border-slate-200 bg-slate-50">
-        <div className="mx-auto max-w-6xl px-6 py-16">
-          <div className="max-w-2xl">
-            <h2 className="text-3xl font-bold tracking-tight">
-              Two ways to buy
-            </h2>
-            <p className="mt-4 text-slate-600">
-              Use the platform on a recurring basis, or purchase one-off reports
-              when you just need answers quickly.
-            </p>
-          </div>
+      <footer className="border-t border-slate-800 bg-slate-900 text-white">
+        <div className="mx-auto max-w-6xl px-6 py-12">
+          <div className="grid gap-10 md:grid-cols-2">
+            <div>
+              <h2 className="text-xl font-bold">
+                Chicago Business Intelligence
+              </h2>
 
-          <div className="mt-10 grid gap-6 md:grid-cols-2">
-            <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-              <div className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-                SaaS access
-              </div>
-              <h3 className="mt-2 text-2xl font-bold">Subscription</h3>
-              <p className="mt-4 text-sm leading-7 text-slate-600">
-                Best for brokers, operators, and teams that need ongoing market
-                intelligence.
+              <p className="mt-4 max-w-md text-sm leading-7 text-slate-300">
+                A resource for exploring Chicago business,
+                property, and neighborhood information
+                through publicly available data.
               </p>
-              <ul className="mt-6 space-y-3 text-sm text-slate-700">
-                <li>Unlimited neighborhood analysis</li>
-                <li>Multiple business categories</li>
-                <li>Density scoring and rankings</li>
-                <li>Exportable results</li>
-              </ul>
-              <div className="mt-8 text-sm font-medium text-slate-900">
-                Planned pricing: monthly subscription
-              </div>
+
+              <p className="mt-4 text-sm leading-7 text-slate-400">
+                Making local information easier to find,
+                understand, and use.
+              </p>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-              <div className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-                Premium reports
-              </div>
-              <h3 className="mt-2 text-2xl font-bold">One-time purchase</h3>
-              <p className="mt-4 text-sm leading-7 text-slate-600">
-                Best for buyers who do not need recurring access and just want a
-                polished market view.
+            <div>
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+                Data &amp; Sources
+              </h3>
+
+              <p className="mt-4 text-sm leading-7 text-slate-300">
+                Data is primarily sourced from the
+                City of Chicago&apos;s official Open Data Portal,
+                which publishes public datasets maintained
+                by city departments and agencies.
               </p>
-              <ul className="mt-6 space-y-3 text-sm text-slate-700">
-                <li>Category-specific Chicago market report</li>
-                <li>Top neighborhoods and supporting data</li>
-                <li>Clear takeaway summary</li>
-                <li>Useful for internal sharing and decision support</li>
-              </ul>
-              <div className="mt-8 text-sm font-medium text-slate-900">
-                Planned pricing: premium one-time report
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
 
-      <section className="mx-auto max-w-6xl px-6 py-16">
-        <div className="rounded-3xl bg-slate-900 px-8 py-12 text-white">
-          <div className="max-w-3xl">
-            <h2 className="text-3xl font-bold tracking-tight">
-              Chicago first. Broader expansion later.
-            </h2>
-            <p className="mt-4 text-slate-300">
-              We are starting with Chicago because the city has rich public data
-              and clear neighborhood dynamics. The long-term vision is a broader
-              market intelligence platform for site selection across multiple
-              cities.
-            </p>
-
-            <div className="mt-8 flex flex-wrap gap-4">
               <a
-                href="/dashboard"
-                className="rounded-lg bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-200"
+                href="https://data.cityofchicago.org/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-4 inline-block text-sm font-medium text-white underline decoration-slate-500 underline-offset-4 hover:decoration-white"
               >
-                See the dashboard
-              </a>
-              <a
-                href="mailto:hello@example.com"
-                className="rounded-lg border border-slate-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
-              >
-                Request a demo
+                Visit the City of Chicago Open Data Portal ↗
               </a>
             </div>
           </div>
+
+          <div className="mt-10 border-t border-slate-700 pt-6">
+            <p className="text-xs leading-6 text-slate-400">
+              Chicago Business Intelligence is an independent
+              resource and is not affiliated with or endorsed
+              by the City of Chicago. Public datasets may
+              contain errors, omissions, or reporting delays.
+              Refer to the original source for official records.
+            </p>
+          </div>
         </div>
-      </section>
+      </footer>
     </main>
   )
 }
