@@ -33,22 +33,27 @@ const tools = [
     category: "Property Intelligence",
     action: "Explore violations",
   },
+{
+  title: "Food Inspection Activity",
+  description:
+    "Explore food safety inspection results, facility risk classifications, and documented violations across Chicago.",
+  href: "/inspections",
+  category: "Food Safety & Inspections",
+  action: "Explore inspections",
+},
+
 ]
 
 
 
 const upcoming = [
   {
-    title: "Restaurant Intelligence",
-    description:
-      "Research food inspection results and restaurant activity.",
-  },
-  {
     title: "Neighborhood Trends",
     description:
       "Explore additional indicators and changes across Chicago neighborhoods.",
   },
 ]
+
 
 export default function Home() {
   return (
@@ -135,7 +140,7 @@ export default function Home() {
             What can you discover?
           </h2>
 
-          <div className="mt-8 grid gap-6 md:grid-cols-2">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {[
               "Which neighborhoods have fewer competing businesses?",
               "Where are new businesses receiving licenses?",
