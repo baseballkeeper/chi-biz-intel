@@ -39,11 +39,16 @@ type Permit = {
   workDescription: string;
   reportedCost: number | null;
   communityArea: string;
+  latitude?: number;
+  longitude?: number;
 };
 
 type PermitResponse = {
   count: number;
+  matched?: number;
   limited: boolean;
+  complete?: boolean;
+  coordinateBased?: boolean;
   permits: Permit[];
   error?: string;
 };
@@ -53,23 +58,15 @@ const CHICAGO_CENTER: [number, number] = [
   -87.6298,
 ];
 
-function getName(
-  feature: AreaFeature,
-  layer: Layer
-): string {
+function getName(feature: AreaFeature, layer: Layer): string {
   return layer === "communities"
     ? feature.properties.community ?? "Unknown"
     : feature.properties.pri_neigh ?? "Unknown";
 }
 
-function getDetails(
-  feature: AreaFeature,
-  layer: Layer
-): string {
+function getDetails(feature: AreaFeature, layer: Layer): string {
   if (layer === "communities") {
-    return `Community Area #${
-      feature.properties.area_numbe ?? "Unknown"
-    }`;
+    return `Community Area #${feature.properties.area_numbe ?? "Unknown"}`;
   }
 
   return feature.properties.sec_neigh
@@ -81,17 +78,13 @@ function getCommunityArea(
   feature: AreaFeature | null,
   layer: Layer
 ): string | null {
-  if (!feature || layer !== "communities") {
-    return null;
-  }
+  if (!feature || layer !== "communities") return null;
 
   const value = Number(feature.properties.area_numbe);
 
-  if (!Number.isInteger(value) || value < 1 || value > 77) {
-    return null;
-  }
-
-  return String(value);
+  return Number.isInteger(value) && value >= 1 && value <= 77
+    ? String(value)
+    : null;
 }
 
 function formatDate(value: string): string {
@@ -99,11 +92,9 @@ function formatDate(value: string): string {
 
   const parts = value.slice(0, 10).split("-");
 
-  if (parts.length !== 3) {
-    return value.slice(0, 10);
-  }
-
-  return `${parts[1]}/${parts[2]}/${parts[0]}`;
+  return parts.length === 3
+    ? `${parts[1]}/${parts[2]}/${parts[0]}`
+    : value.slice(0, 10);
 }
 
 function formatMoney(value: number | null): string {
@@ -131,9 +122,7 @@ function MapController({
     const bounds = L.geoJSON(data).getBounds();
 
     if (bounds.isValid()) {
-      map.fitBounds(bounds, {
-        padding: [18, 18],
-      });
+      map.fitBounds(bounds, { padding: [18, 18] });
     }
   }, [map, data]);
 
@@ -163,6 +152,7 @@ export default function ChicagoMap() {
 
   const [permitDays, setPermitDays] = useState(30);
   const [permits, setPermits] = useState<Permit[]>([]);
+  const [permitCount, setPermitCount] = useState(0);
   const [permitLoading, setPermitLoading] = useState(false);
   const [permitError, setPermitError] = useState("");
   const [permitLimited, setPermitLimited] = useState(false);
@@ -210,9 +200,7 @@ export default function ChicagoMap() {
             : "Could not load geography"
         );
       } finally {
-        if (!controller.signal.aborted) {
-          setLoading(false);
-        }
+        if (!controller.signal.aborted) setLoading(false);
       }
     }
 
@@ -239,13 +227,18 @@ export default function ChicagoMap() {
 
   const communityArea = getCommunityArea(selected, layer);
 
+  const selectedLocation = selected
+    ? getName(selected, layer)
+    : "";
+
   useEffect(() => {
     const controller = new AbortController();
 
-    if (!communityArea) {
+    if (!selectedLocation) {
       setPermits([]);
-      setPermitError("");
+      setPermitCount(0);
       setPermitLimited(false);
+      setPermitError("");
       setPermitLoading(false);
 
       return () => controller.abort();
@@ -255,20 +248,37 @@ export default function ChicagoMap() {
       setPermitLoading(true);
       setPermitError("");
       setPermits([]);
+      setPermitCount(0);
       setPermitLimited(false);
 
       try {
-        const params = new URLSearchParams({
-          area: communityArea!,
-          days: String(permitDays),
-          status: "all",
-          category: "all",
-        });
+        let endpoint: string;
 
-        const response = await fetch(
-          `/api/permits?${params.toString()}`,
-          { signal: controller.signal }
-        );
+        if (layer === "communities") {
+          if (!communityArea) {
+            throw new Error("Community area number unavailable");
+          }
+
+          const params = new URLSearchParams({
+            area: communityArea,
+            days: String(permitDays),
+            status: "all",
+            category: "all",
+          });
+
+          endpoint = `/api/permits?${params.toString()}`;
+        } else {
+          const params = new URLSearchParams({
+            neighborhood: selectedLocation,
+            days: String(permitDays),
+          });
+
+          endpoint = `/api/neighborhood-permits?${params.toString()}`;
+        }
+
+        const response = await fetch(endpoint, {
+          signal: controller.signal,
+        });
 
         const result = (await response.json()) as PermitResponse;
 
@@ -285,7 +295,12 @@ export default function ChicagoMap() {
 
         if (!controller.signal.aborted) {
           setPermits(result.permits);
-          setPermitLimited(result.limited);
+          setPermitCount(
+            layer === "neighborhoods"
+              ? result.matched ?? result.permits.length
+              : result.permits.length
+          );
+          setPermitLimited(Boolean(result.limited));
         }
       } catch (err) {
         if (controller.signal.aborted) return;
@@ -305,7 +320,7 @@ export default function ChicagoMap() {
     loadPermits();
 
     return () => controller.abort();
-  }, [communityArea, permitDays]);
+  }, [layer, selectedLocation, communityArea, permitDays]);
 
   const matches = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -314,9 +329,7 @@ export default function ChicagoMap() {
 
     return sortedFeatures
       .filter((feature) =>
-        getName(feature, layer)
-          .toLowerCase()
-          .includes(query)
+        getName(feature, layer).toLowerCase().includes(query)
       )
       .slice(0, 12);
   }, [sortedFeatures, search, layer]);
@@ -420,7 +433,7 @@ export default function ChicagoMap() {
               </p>
 
               <h2 className="mt-2 text-xl font-bold text-slate-900">
-                {getName(selected, layer)}
+                {selectedLocation}
               </h2>
 
               <p className="mt-2 break-words text-sm text-slate-600">
@@ -435,31 +448,31 @@ export default function ChicagoMap() {
                 Clear selection
               </button>
 
-              {communityArea && (
-                <div className="mt-6 rounded-lg bg-blue-50 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
-                    Building permit activity
-                  </p>
+              <div className="mt-6 rounded-lg bg-blue-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+                  Building permit activity
+                </p>
 
-                  <p className="mt-2 text-2xl font-bold text-slate-900">
-                    {permitLoading
-                      ? "Loading..."
-                      : permitError
-                        ? "Unavailable"
-                        : permits.length.toLocaleString()}
-                  </p>
+                <p className="mt-2 text-2xl font-bold text-slate-900">
+                  {permitLoading
+                    ? "Loading..."
+                    : permitError
+                      ? "Unavailable"
+                      : permitCount.toLocaleString()}
+                </p>
 
-                  <p className="mt-1 text-xs text-slate-600">
-                    Records returned for the selected period
-                  </p>
+                <p className="mt-1 text-xs text-slate-600">
+                  {layer === "neighborhoods"
+                    ? "Geocoded permits matched to this neighborhood"
+                    : "Permit records returned for this community area"}
+                </p>
 
-                  {permitLimited && (
-                    <p className="mt-2 text-xs text-amber-800">
-                      Display limited to the latest 500 records.
-                    </p>
-                  )}
-                </div>
-              )}
+                {permitLimited && (
+                  <p className="mt-2 text-xs text-amber-800">
+                    Results are limited to 500 records.
+                  </p>
+                )}
+              </div>
             </div>
           ) : (
             <div className="mt-6 border-t border-slate-200 pt-5">
@@ -476,8 +489,8 @@ export default function ChicagoMap() {
 
           <div className="mt-6 rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-600">
             {layer === "communities"
-              ? "Official Chicago community areas. Permit activity is filtered using the city's community area field."
-              : "Approximate Chicago neighborhood boundaries. Permit filtering for these neighborhoods is not yet available."}
+              ? "Official Chicago community areas. Permit activity uses the city's community area assignments."
+              : "Approximate Chicago neighborhood boundaries. Permit activity uses coordinate-based matching and excludes records without usable coordinates."}
           </div>
         </aside>
 
@@ -526,9 +539,7 @@ export default function ChicagoMap() {
                   const isSelected = name === selectedName;
 
                   return {
-                    color: isSelected
-                      ? "#1d4ed8"
-                      : "#475569",
+                    color: isSelected ? "#1d4ed8" : "#475569",
                     weight: isSelected ? 3 : 1,
                     fillColor: isSelected
                       ? "#2563eb"
@@ -556,22 +567,7 @@ export default function ChicagoMap() {
         </div>
       </div>
 
-      {selected && layer === "neighborhoods" && (
-        <section className="rounded-xl border border-slate-200 bg-white p-6">
-          <h2 className="text-xl font-bold text-slate-900">
-            {getName(selected, layer)} Activity
-          </h2>
-
-          <p className="mt-3 text-sm leading-7 text-slate-600">
-            Geographic activity filtering for approximate
-            neighborhoods is coming next. We will match
-            individual records to neighborhood boundaries
-            using their geographic coordinates.
-          </p>
-        </section>
-      )}
-
-      {selected && communityArea && (
+      {selected && (
         <section className="rounded-xl border border-slate-200 bg-white p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -580,12 +576,13 @@ export default function ChicagoMap() {
               </p>
 
               <h2 className="mt-2 text-2xl font-bold text-slate-900">
-                Building Permits — {getName(selected, layer)}
+                Building Permits — {selectedLocation}
               </h2>
 
               <p className="mt-2 text-sm text-slate-600">
-                Recent permit applications assigned to
-                Community Area #{communityArea}.
+                {layer === "neighborhoods"
+                  ? "Recent geocoded permits inside the approximate neighborhood boundary."
+                  : `Recent permit applications assigned to Community Area #${communityArea ?? "Unknown"}.`}
               </p>
             </div>
 
@@ -630,7 +627,7 @@ export default function ChicagoMap() {
             <>
               <div className="mt-6 rounded-lg bg-slate-50 p-4">
                 <p className="text-sm font-semibold text-slate-900">
-                  {permits.length.toLocaleString()} permit records returned
+                  {permitCount.toLocaleString()} matching permit records
                 </p>
 
                 <p className="mt-1 text-xs leading-5 text-slate-600">
@@ -639,18 +636,26 @@ export default function ChicagoMap() {
                   and issued permits.
                 </p>
 
+                {layer === "neighborhoods" && (
+                  <p className="mt-2 text-xs leading-5 text-slate-600">
+                    Neighborhood results are based on permit
+                    coordinates and approximate boundaries.
+                    Records without usable coordinates are excluded.
+                  </p>
+                )}
+
                 {permitLimited && (
                   <p className="mt-2 text-xs font-medium text-amber-800">
-                    At least 500 records match. Only the 500
-                    most recent are displayed.
+                    Only the latest 500 records are available
+                    in this result. The list below shows up to 25.
                   </p>
                 )}
               </div>
 
               {permits.length === 0 ? (
                 <p className="mt-6 text-sm text-slate-600">
-                  No permit records were returned for this
-                  area and period.
+                  No matching permit records were returned
+                  for this area and period.
                 </p>
               ) : (
                 <div className="mt-6 space-y-3">
@@ -666,7 +671,8 @@ export default function ChicagoMap() {
                           </h3>
 
                           <p className="mt-1 text-sm text-slate-600">
-                            {permit.permitType || "Permit type unavailable"}
+                            {permit.permitType ||
+                              "Permit type unavailable"}
                           </p>
                         </div>
 
@@ -710,9 +716,8 @@ export default function ChicagoMap() {
 
                   {permits.length > 25 && (
                     <p className="pt-2 text-center text-sm text-slate-500">
-                      Showing the 25 most recent records
-                      from {permits.length.toLocaleString()} returned.
-                      More detailed browsing will be added later.
+                      Showing 25 of {permits.length.toLocaleString()}
+                      {" "}returned records.
                     </p>
                   )}
                 </div>
