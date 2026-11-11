@@ -1,10 +1,110 @@
+
 import { NextResponse } from "next/server"
 
-const PERMITS_DATASET = "ydr8-5enu"
-const PERMITS_BASE = `https://data.cityofchicago.org/resource/${PERMITS_DATASET}.json`
+const DATASET = "ydr8-5enu"
+const BASE_URL = `https://data.cityofchicago.org/resource/${DATASET}.json`
 
-function buildPermitsQuery(): string {
-  return `
+const CATEGORY_KEYWORDS: Record<string, string[]> = {
+  roofing: ["ROOF", "SHINGLE"],
+  hvac: ["HVAC", "FURNACE", "AIR CONDITION", "DUCTWORK"],
+  electrical: ["ELECTRIC", "WIRING", "LIGHTING"],
+  plumbing: ["PLUMB", "SEWER", "WATER HEATER"],
+  renovation: ["RENOVAT", "REMODEL", "ALTERATION", "REHAB"],
+  demolition: ["DEMOLITION", "WRECKING", "DEMOLISH"],
+  signs: ["SIGNAGE", "SIGN PERMIT", "SIGN INSTALL"],
+}
+
+type RawPermit = Record<string, string | undefined>
+
+function escapeSoql(value: string): string {
+  return value.replace(/'/g, "''")
+}
+
+function keywordFilter(keyword: string): string {
+  const safe = escapeSoql(keyword.toUpperCase())
+
+  return `(
+    upper(work_description) like '%${safe}%'
+    OR upper(permit_type) like '%${safe}%'
+  )`.replace(/\s+/g, " ")
+}
+
+export async function GET(request: Request) {
+  const params = new URL(request.url).searchParams
+
+  const search = (params.get("search") || "").trim().slice(0, 80)
+  const category = params.get("category") || "all"
+  const status = params.get("status") || "all"
+  const area = params.get("area") || "all"
+  const days = Number(params.get("days") || 30)
+  const minCost = Number(params.get("minCost") || 0)
+
+  if (
+    (category !== "all" &&
+      !Object.prototype.hasOwnProperty.call(
+        CATEGORY_KEYWORDS,
+        category
+      )) ||
+    !["all", "issued", "pending"].includes(status) ||
+    (area !== "all" &&
+      (!/^\d+$/.test(area) ||
+        Number(area) < 1 ||
+        Number(area) > 77)) ||
+    ![7, 30, 90, 180, 365].includes(days) ||
+    !Number.isFinite(minCost) ||
+    minCost < 0 ||
+    minCost > 1000000000
+  ) {
+    return NextResponse.json(
+      { error: "Invalid filter parameters" },
+      { status: 400 }
+    )
+  }
+
+  const cutoff = new Date()
+  cutoff.setUTCDate(cutoff.getUTCDate() - days)
+
+  const cutoffDate = cutoff.toISOString().slice(0, 10)
+
+  const filters: string[] = [
+    `application_start_date >= '${cutoffDate}T00:00:00'`,
+  ]
+
+  if (search) {
+    const safe = escapeSoql(search.toUpperCase())
+
+    filters.push(`(
+      upper(work_description) like '%${safe}%'
+      OR upper(street_name) like '%${safe}%'
+      OR upper(permit_type) like '%${safe}%'
+    )`.replace(/\s+/g, " "))
+  }
+
+  if (category !== "all") {
+    const expressions = CATEGORY_KEYWORDS[category].map(
+      keywordFilter
+    )
+
+    filters.push(`(${expressions.join(" OR ")})`)
+  }
+
+  if (status === "issued") {
+    filters.push("issue_date IS NOT NULL")
+  }
+
+  if (status === "pending") {
+    filters.push("issue_date IS NULL")
+  }
+
+  if (area !== "all") {
+    filters.push(`community_area = '${area}'`)
+  }
+
+  if (minCost > 0) {
+    filters.push(`reported_cost >= ${minCost}`)
+  }
+
+  const soql = `
     SELECT
       permit_,
       permit_type,
@@ -16,82 +116,84 @@ function buildPermitsQuery(): string {
       street_number,
       street_direction,
       street_name,
-      work_description
-    WHERE application_start_date IS NOT NULL
+      work_description,
+      reported_cost,
+      community_area
+    WHERE ${filters.join(" AND ")}
     ORDER BY application_start_date DESC
-    LIMIT 50
-  `
-    .trim()
-    .replace(/\s+/g, " ")
-}
+    LIMIT 500
+  `.trim().replace(/\s+/g, " ")
 
-export async function GET() {
-  const soql = buildPermitsQuery()
-  const url = `${PERMITS_BASE}?$query=${encodeURIComponent(soql)}`
+  const url = `${BASE_URL}?$query=${encodeURIComponent(soql)}`
 
   try {
-    const res = await fetch(url, {
-      next: { revalidate: 3600 },
+    const response = await fetch(url, {
+      next: { revalidate: 900 },
       headers: {
-        "User-Agent": "chi-biz-intel-poc/1.0",
+        "User-Agent": "chi-biz-intel/1.0",
       },
     })
 
-    if (!res.ok) {
-      const text = await res.text()
+    if (!response.ok) {
+      const details = await response.text()
+
       return NextResponse.json(
         {
-          error: "Upstream Socrata request failed",
-          status: res.status,
-          details: text.slice(0, 1500),
-          url,
-          soql,
+          error: "Chicago Open Data request failed",
+          status: response.status,
+          details: details.slice(0, 1200),
         },
         { status: 502 }
       )
     }
 
-    const rows = (await res.json()) as Array<{
-      permit_?: string
-      permit_type?: string
-      permit_status?: string
-      permit_milestone?: string
-      review_type?: string
-      application_start_date?: string
-      issue_date?: string
-      street_number?: string
-      street_direction?: string
-      street_name?: string
-      work_description?: string
-    }>
+    const rows = (await response.json()) as RawPermit[]
 
-    const permits = rows.map((r) => {
-      const address = [r.street_number, r.street_direction, r.street_name]
-        .filter(Boolean)
-        .join(" ")
-        .trim()
+    const permits = rows.map((row) => {
+      const address = [
+        row.street_number,
+        row.street_direction,
+        row.street_name,
+      ].filter(Boolean).join(" ")
+
+      const cost = row.reported_cost
+        ? Number(row.reported_cost)
+        : null
 
       return {
-        permitNumber: r.permit_ || "",
-        permitType: r.permit_type || "",
-        permitStatus: r.permit_status || "",
-        permitMilestone: r.permit_milestone || "",
-        reviewType: r.review_type || "",
-        applicationStartDate: r.application_start_date || "",
-        issueDate: r.issue_date || "",
+        permitNumber: row.permit_ || "",
+        permitType: row.permit_type || "",
+        permitStatus: row.permit_status || "",
+        permitMilestone: row.permit_milestone || "",
+        reviewType: row.review_type || "",
+        applicationStartDate: row.application_start_date || "",
+        issueDate: row.issue_date || "",
         address,
-        workDescription: r.work_description || "",
+        workDescription: row.work_description || "",
+        reportedCost:
+          cost !== null && Number.isFinite(cost)
+            ? cost
+            : null,
+        communityArea: row.community_area || "",
       }
     })
 
     return NextResponse.json({
-      source: { dataset: PERMITS_DATASET },
+      source: { dataset: DATASET },
       refreshedAt: new Date().toISOString(),
+      count: permits.length,
+      limited: permits.length === 500,
       permits,
     })
-  } catch (err: any) {
+  } catch (error) {
     return NextResponse.json(
-      { error: "Server error", details: String(err?.message || err) },
+      {
+        error: "Server error",
+        details:
+          error instanceof Error
+            ? error.message
+            : String(error),
+      },
       { status: 500 }
     )
   }
