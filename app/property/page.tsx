@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -42,6 +41,32 @@ type Inspection = {
   violations: string;
 };
 
+type ServiceRequest = {
+  requestNumber: string;
+  type: string;
+  shortCode: string;
+  status: string;
+  createdDate: string;
+  modifiedDate: string;
+  closedDate: string;
+  address: string;
+  duplicate: boolean;
+  communityArea: string;
+  ward: string;
+  latitude: number | null;
+  longitude: number | null;
+};
+
+type ServiceRequestData = {
+  summary: {
+    totalRequests: number;
+    duplicateRequests: number;
+  };
+  records: ServiceRequest[];
+  complete: boolean;
+  note: string;
+};
+
 type PropertyData = {
   address: string;
   summary: {
@@ -63,7 +88,8 @@ type Category =
   | "violation"
   | "permit"
   | "license"
-  | "inspection";
+  | "inspection"
+  | "311";
 
 type TimelineItem = {
   id: string;
@@ -85,6 +111,7 @@ const categories: {
   { id: "permit", label: "Permits" },
   { id: "license", label: "Licenses" },
   { id: "inspection", label: "Food inspections" },
+  { id: "311", label: "311 requests" },
 ];
 
 function formatDate(value: string): string {
@@ -123,6 +150,8 @@ function categoryLabel(category: Category): string {
       return "Business license";
     case "inspection":
       return "Food inspection";
+    case "311":
+      return "311 service request";
   }
 }
 
@@ -136,10 +165,12 @@ function categoryStyle(category: Category): string {
       return "bg-violet-50 text-violet-700";
     case "inspection":
       return "bg-amber-50 text-amber-700";
+    case "311":
+      return "bg-teal-50 text-teal-700";
   }
 }
 
-function buildTimeline(data: PropertyData): TimelineItem[] {
+function buildTimeline(data: PropertyData, requests: ServiceRequestData | null): TimelineItem[] {
   const items: TimelineItem[] = [];
 
   for (const record of data.violations.records) {
@@ -219,6 +250,25 @@ function buildTimeline(data: PropertyData): TimelineItem[] {
     });
   }
 
+  for (const record of requests?.records ?? []) {
+    items.push({
+      id: `311-${record.requestNumber}`,
+      category: "311",
+      date: record.createdDate,
+      title: record.type || "311 service request",
+      subtitle: `Request ${record.requestNumber}`,
+      status: record.status || "Not reported",
+      details: "This is a reported service request, not a verified property violation. The request may concern public infrastructure or services associated with this address.",
+      metadata: [
+        `Request number: ${record.requestNumber}`,
+        `Recorded address: ${record.address || "Not reported"}`,
+        `Closed: ${formatDate(record.closedDate)}`,
+        `Duplicate flag: ${record.duplicate ? "Yes" : "No"}`,
+        `Ward: ${record.ward || "Not reported"}`,
+      ],
+    });
+  }
+
   return items.sort((a, b) =>
     b.date.localeCompare(a.date)
   );
@@ -234,6 +284,8 @@ export default function PropertyPage() {
   const [data, setData] = useState<PropertyData | null>(
     null
   );
+  const [requests, setRequests] = useState<ServiceRequestData | null>(null);
+  const [requestsError, setRequestsError] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<
@@ -251,22 +303,41 @@ export default function PropertyPage() {
       setLoading(true);
       setError("");
       setData(null);
+      setRequests(null);
+      setRequestsError("");
 
       try {
-        const response = await fetch(
-          `/api/property?address=${encodeURIComponent(searchedAddress)}`,
-          { signal: controller.signal }
-        );
+        const query = encodeURIComponent(searchedAddress);
+        const [propertyResult, requestsResult] = await Promise.allSettled([
+          fetch(`/api/property?address=${query}`, { signal: controller.signal })
+            .then(async (response) => {
+              const body = await response.json();
+              if (!response.ok) {
+                throw new Error(body.error || "Unable to load property records.");
+              }
+              return body as PropertyData;
+            }),
+          fetch(`/api/property-311?address=${query}`, { signal: controller.signal })
+            .then(async (response) => {
+              const body = await response.json();
+              if (!response.ok) {
+                throw new Error(body.error || "Unable to load 311 requests.");
+              }
+              return body as ServiceRequestData;
+            }),
+        ]);
 
-        const result = await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            result.error || "Unable to load property records."
-          );
+        if (controller.signal.aborted) return;
+        if (propertyResult.status === "rejected") {
+          throw propertyResult.reason;
         }
+        setData(propertyResult.value);
 
-        setData(result as PropertyData);
+        if (requestsResult.status === "fulfilled") {
+          setRequests(requestsResult.value);
+        } else {
+          setRequestsError("311 requests are temporarily unavailable. Other property records are still shown.");
+        }
       } catch (err) {
         if (controller.signal.aborted) return;
 
@@ -288,8 +359,8 @@ export default function PropertyPage() {
   }, [searchedAddress]);
 
   const timeline = useMemo(
-    () => (data ? buildTimeline(data) : []),
-    [data]
+    () => (data ? buildTimeline(data, requests) : []),
+    [data, requests]
   );
 
   const filteredTimeline = useMemo(
@@ -347,8 +418,8 @@ export default function PropertyPage() {
 
           <p className="mt-5 max-w-3xl text-lg leading-8 text-slate-600">
             Search an address to explore building permits,
-            code violations, business licenses, and food
-            inspection activity in one place.
+            code violations, business licenses, food
+            inspections, and 311 service requests in one place.
           </p>
 
           <form
@@ -414,14 +485,19 @@ export default function PropertyPage() {
 
               <p className="mt-2 text-sm text-slate-500">
                 {data.complete
-                  ? "All matching query results retrieved"
+                  ? "All matching property query results retrieved"
                   : "Some source results may be incomplete"}
-                {" · "}
-                Updated {formatDate(data.refreshedAt)}
+                {" | "} Updated {formatDate(data.refreshedAt)}
               </p>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {requestsError && (
+              <p role="status" className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                {requestsError}
+              </p>
+            )}
+
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
               {[
                 {
                   label: "Building violations",
@@ -443,6 +519,11 @@ export default function PropertyPage() {
                   value: data.summary.foodInspections,
                   category: "inspection" as const,
                 },
+                {
+                  label: "311 requests",
+                  value: requests?.summary.totalRequests ?? null,
+                  category: "311" as const,
+                },
               ].map((item) => (
                 <button
                   key={item.category}
@@ -456,7 +537,7 @@ export default function PropertyPage() {
                     {item.label}
                   </p>
                   <p className="mt-3 text-4xl font-bold tracking-tight">
-                    {item.value.toLocaleString()}
+                    {item.value === null ? "Unavailable" : item.value.toLocaleString()}
                   </p>
                   <p className="mt-3 text-sm font-semibold text-blue-700">
                     View records &rarr;
@@ -475,6 +556,7 @@ export default function PropertyPage() {
                   <p className="mt-2 text-sm text-slate-600">
                     {filteredTimeline.length.toLocaleString()}{" "}
                     matching records, newest first.
+                    {requests && !requests.complete && " 311 results may be incomplete."}
                   </p>
                 </div>
               </div>
@@ -624,6 +706,13 @@ export default function PropertyPage() {
                 history of a building.
               </p>
 
+              <p className="mt-3 text-sm leading-7 text-slate-600">
+                311 requests are public reports and do not establish that a violation occurred.
+                Some refer to nearby streets, infrastructure, businesses, or services.
+                {requests && ` ${requests.summary.duplicateRequests.toLocaleString()} requests are flagged as duplicates by the city.`}
+                {requests && !requests.complete && " The 311 search reached its retrieval limit; its count may be understated."}
+              </p>
+
               <a
                 href="https://data.cityofchicago.org/"
                 target="_blank"
@@ -639,3 +728,4 @@ export default function PropertyPage() {
     </main>
   );
 }
+
