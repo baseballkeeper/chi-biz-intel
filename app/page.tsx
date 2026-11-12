@@ -1,5 +1,15 @@
 
 const tools = [
+
+  {
+    title: "Property Intelligence",
+    description:
+      "Search any Chicago street address to explore building permits, code violations, business licenses, and historical food inspections in one chronological timeline.",
+    href: "/property",
+    category: "Property Research",
+    action: "Research a property",
+  },
+
   {
     title: "Neighborhood Explorer",
     description:
