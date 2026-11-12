@@ -1,22 +1,20 @@
 
 const tools = [
-
+  {
+    title: "Geographic Explorer",
+    description:
+      "Explore Chicago's community areas and neighborhoods on an interactive map. Investigate permits, business licenses, inspections, violations, 311 requests, and vacant-building reports.",
+    href: "/map",
+    category: "Geographic Intelligence",
+    action: "Explore the map",
+  },
   {
     title: "Property Intelligence",
     description:
-      "Search any Chicago street address to explore building permits, code violations, business licenses, and historical food inspections in one chronological timeline.",
+      "Research Chicago street addresses using permits, violations, business licenses, food inspections, 311 requests, and historical vacancy reports in one timeline.",
     href: "/property",
     category: "Property Research",
     action: "Research a property",
-  },
-
-  {
-    title: "Neighborhood Explorer",
-    description:
-      "Compare Chicago community areas using business density, population, and local market indicators.",
-    href: "/dashboard",
-    category: "Market Research",
-    action: "Explore neighborhoods",
   },
   {
     title: "Building Permits",
@@ -50,14 +48,6 @@ const tools = [
     category: "Food Safety & Inspections",
     action: "Explore inspections",
   },
-  {
-    title: "Chicago Geographic Explorer",
-    description:
-      "Explore Chicago's 77 official community areas and 98 approximate neighborhoods on an interactive map. Search, zoom, and inspect geographic boundaries.",
-    href: "/map",
-    category: "Geographic Intelligence",
-    action: "Explore the map",
-  },
 ];
 
 const upcoming = [
@@ -72,46 +62,65 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-white text-slate-900">
       <section className="border-b border-slate-200 bg-slate-50">
-        <div className="mx-auto max-w-6xl px-6 py-20">
-          <div className="max-w-4xl">
+        <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 py-16 lg:grid-cols-2 lg:gap-14 lg:py-20">
+          <div>
             <p className="mb-5 text-sm font-semibold uppercase tracking-widest text-blue-700">
               MetroSift / Chicago
             </p>
 
-            <h1 className="text-4xl font-bold tracking-tight sm:text-6xl">
-              Understand what&apos;s happening across Chicago.
+            <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
+              Find the signal in Chicago&apos;s commercial activity.
             </h1>
 
-            <p className="mt-6 max-w-3xl text-lg leading-8 text-slate-600">
-              Explore business activity, construction permits,
-              neighborhood trends, geographic boundaries,
-              and other local intelligence in one place.
+            <p className="mt-6 text-lg leading-8 text-slate-600">
+              Explore business licenses, construction permits, property records,
+              and neighborhood changes in one place.
             </p>
 
-            <p className="mt-4 max-w-3xl text-slate-600">
-              Built for entrepreneurs, contractors, investors,
-              researchers, and anyone making decisions using
-              Chicago public data.
+            <p className="mt-4 text-slate-600">
+              Research the locations that matter to your business, from individual
+              properties to entire Chicago neighborhoods.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
               <a
-                href="#tools"
-                className="rounded-lg bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
-              >
-                Explore tools
-              </a>
-
-              <a
                 href="/map"
-                className="rounded-lg border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-100"
+                className="rounded-lg bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
               >
                 Explore Chicago map
               </a>
+
+              <a
+                href="/property"
+                className="rounded-lg border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-100"
+              >
+                Research a property
+              </a>
             </div>
+          </div>
+
+          {/* Reserved for a future Chicago hero photograph.
+              To add one later, replace the placeholder contents with an image
+              from /public, such as /images/chicago-hero.jpg. */}
+
+          <div className="relative aspect-[4/3] overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
+
+
+<img
+  src="/1.jpg"
+  alt="Chicago skyline"
+  className="h-full w-full object-cover"
+  style={{
+    transform: "scale(1.5) translateX(-10%)",
+    objectPosition: "55% 65%",
+  }}
+/>
+
+
           </div>
         </div>
       </section>
+
 
       <section
         id="tools"
