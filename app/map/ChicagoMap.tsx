@@ -19,7 +19,7 @@ import type {
 import "leaflet/dist/leaflet.css";
 
 type Layer = "communities" | "neighborhoods";
-type Activity = "permits" | "businesses" | "inspections" | "violations";
+type Activity = "permits" | "businesses" | "inspections" | "violations" | "311" | "vacancy";
 
 type Properties = {
   community?: string;
@@ -151,6 +151,104 @@ type ViolationLocation = {
   longitude: number;
   violations: Violation[];
 };
+
+type ServiceRequest = {
+  requestNumber: string;
+  type: string;
+  status: string;
+  createdDate: string;
+  closedDate: string;
+  address: string;
+  duplicate: boolean;
+  communityArea: string;
+  latitude: number;
+  longitude: number;
+};
+
+type ServiceRequestResponse = {
+  count: number;
+  returned: number;
+  limited: boolean;
+  complete: boolean;
+  requests: ServiceRequest[];
+  error?: string;
+};
+
+type ServiceRequestLocation = {
+  key: string;
+  latitude: number;
+  longitude: number;
+  requests: ServiceRequest[];
+};
+
+type VacancySource = "modern_311" | "historical_archive";
+type VacancyFilter = "all" | VacancySource;
+
+type VacancyRecord = {
+  id: string;
+  source: VacancySource;
+  sourceLabel: string;
+  date: string;
+  address: string;
+  status: string;
+  type: string;
+  latitude: number;
+  longitude: number;
+  details: Record<string, string>;
+};
+
+type VacancyResponse = {
+  count: number;
+  returned: number;
+  limited: boolean;
+  complete: boolean;
+  modernCount: number;
+  historicalCount: number;
+  records: VacancyRecord[];
+  error?: string;
+};
+
+type VacancyLocation = {
+  key: string;
+  latitude: number;
+  longitude: number;
+  records: VacancyRecord[];
+};
+
+function vacancySourceName(source: VacancySource): string {
+  return source === "modern_311" ? "Modern 311 complaint" : "Historical archive report";
+}
+
+function vacancySourceColor(source: VacancySource): string {
+  return source === "modern_311" ? "#d97706" : "#64748b";
+}
+
+const REQUEST_TYPES = [
+  "all",
+  "Graffiti Removal Request",
+  "Rodent Baiting/Rat Complaint",
+  "Abandoned Vehicle Complaint",
+  "Pothole in Street Complaint",
+  "Street Light Out Complaint",
+  "Sanitation Code Violation",
+  "Tree Emergency",
+  "Vacant/Abandoned Building Complaint",
+  "Clean Vacant Lot Request",
+] as const;
+
+function requestStatusColor(status: string): string {
+  const value = status.trim().toLowerCase();
+  if (value === "open") return "#d97706";
+  if (value === "completed" || value === "closed") return "#16a34a";
+  return "#6366f1";
+}
+
+function requestStatusBadge(status: string): string {
+  const value = status.trim().toLowerCase();
+  if (value === "open") return "bg-amber-50 text-amber-800";
+  if (value === "completed" || value === "closed") return "bg-green-50 text-green-800";
+  return "bg-slate-100 text-slate-700";
+}
 
 function violationColor(status: string): string {
   switch (status.trim().toUpperCase()) {
@@ -325,6 +423,20 @@ export default function ChicagoMap() {
   const [violationLoading, setViolationLoading] = useState(false);
   const [violationError, setViolationError] = useState("");
   const [violationLimited, setViolationLimited] = useState(false);
+  const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([]);
+  const [serviceRequestCount, setServiceRequestCount] = useState(0);
+  const [serviceRequestLoading, setServiceRequestLoading] = useState(false);
+  const [serviceRequestError, setServiceRequestError] = useState("");
+  const [serviceRequestLimited, setServiceRequestLimited] = useState(false);
+  const [requestType, setRequestType] = useState("all");
+  const [vacancyFilter, setVacancyFilter] = useState<VacancyFilter>("all");
+  const [vacancyRecords, setVacancyRecords] = useState<VacancyRecord[]>([]);
+  const [vacancyCount, setVacancyCount] = useState(0);
+  const [vacancyModernCount, setVacancyModernCount] = useState(0);
+  const [vacancyHistoricalCount, setVacancyHistoricalCount] = useState(0);
+  const [vacancyLoading, setVacancyLoading] = useState(false);
+  const [vacancyError, setVacancyError] = useState("");
+  const [vacancyLimited, setVacancyLimited] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -650,6 +762,125 @@ export default function ChicagoMap() {
     return () => controller.abort();
   }, [layer, selectedLocation, communityArea, permitDays, activity]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+
+    if (!selectedLocation || activity !== "311") {
+      setServiceRequests([]);
+      setServiceRequestCount(0);
+      setServiceRequestLimited(false);
+      setServiceRequestError("");
+      setServiceRequestLoading(false);
+      return () => controller.abort();
+    }
+
+    async function loadServiceRequests() {
+      setServiceRequestLoading(true);
+      setServiceRequestError("");
+      setServiceRequests([]);
+      setServiceRequestCount(0);
+      setServiceRequestLimited(false);
+
+      try {
+        const params = new URLSearchParams({
+          days: String(permitDays),
+          type: requestType,
+        });
+        if (layer === "communities") {
+          if (!communityArea) throw new Error("Community area number unavailable");
+          params.set("area", communityArea);
+        } else {
+          params.set("neighborhood", selectedLocation);
+        }
+
+        const response = await fetch(`/api/map-311?${params}`, {
+          signal: controller.signal,
+        });
+        const result = (await response.json()) as ServiceRequestResponse;
+        if (!response.ok) {
+          throw new Error(result.error || `311 request failed (${response.status})`);
+        }
+        if (!Array.isArray(result.requests) || !result.complete) {
+          throw new Error("Incomplete or invalid 311 response");
+        }
+        if (!controller.signal.aborted) {
+          setServiceRequests(result.requests);
+          setServiceRequestCount(result.count);
+          setServiceRequestLimited(Boolean(result.limited));
+        }
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setServiceRequestError(err instanceof Error ? err.message : "Could not load 311 requests");
+        }
+      } finally {
+        if (!controller.signal.aborted) setServiceRequestLoading(false);
+      }
+    }
+
+    loadServiceRequests();
+    return () => controller.abort();
+  }, [layer, selectedLocation, communityArea, permitDays, activity, requestType]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    if (!selectedLocation || activity !== "vacancy") {
+      setVacancyRecords([]);
+      setVacancyCount(0);
+      setVacancyModernCount(0);
+      setVacancyHistoricalCount(0);
+      setVacancyLoading(false);
+      setVacancyError("");
+      setVacancyLimited(false);
+      return () => controller.abort();
+    }
+
+    async function loadVacancy() {
+      setVacancyLoading(true);
+      setVacancyError("");
+      setVacancyRecords([]);
+      setVacancyCount(0);
+      setVacancyModernCount(0);
+      setVacancyHistoricalCount(0);
+      setVacancyLimited(false);
+      try {
+        const params = new URLSearchParams({ days: String(permitDays) });
+        if (layer === "communities") {
+          if (!communityArea) throw new Error("Community area number unavailable");
+          params.set("area", communityArea);
+        } else {
+          params.set("neighborhood", selectedLocation);
+        }
+        const response = await fetch(`/api/map-vacancy?${params}`, {
+          signal: controller.signal,
+        });
+        const result = (await response.json()) as VacancyResponse;
+        if (!response.ok) {
+          throw new Error(result.error || `Vacancy request failed (${response.status})`);
+        }
+        if (!Array.isArray(result.records) || !result.complete) {
+          throw new Error("Incomplete or invalid vacancy response");
+        }
+        if (!controller.signal.aborted) {
+          setVacancyRecords(result.records);
+          setVacancyCount(result.count);
+          setVacancyModernCount(result.modernCount);
+          setVacancyHistoricalCount(result.historicalCount);
+          setVacancyLimited(Boolean(result.limited));
+        }
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setVacancyError(err instanceof Error ? err.message : "Could not load vacancy reports");
+        }
+      } finally {
+        if (!controller.signal.aborted) setVacancyLoading(false);
+      }
+    }
+
+    loadVacancy();
+    return () => controller.abort();
+  }, [layer, selectedLocation, communityArea, permitDays, activity]);
+
   const matches = useMemo(() => {
     const query = search.trim().toLowerCase();
 
@@ -781,12 +1012,64 @@ export default function ChicagoMap() {
     closed: violations.filter((item) => item.status.toUpperCase() === "CLOSED").length,
   }), [violations]);
 
-  const activeLoading = activity === "permits" ? permitLoading : activity === "businesses" ? businessLoading : activity === "inspections" ? inspectionLoading : violationLoading;
-  const activeError = activity === "permits" ? permitError : activity === "businesses" ? businessError : activity === "inspections" ? inspectionError : violationError;
-  const activeCount = activity === "permits" ? permitCount : activity === "businesses" ? businessCount : activity === "inspections" ? inspectionCount : violationCount;
-  const activeLimited = activity === "permits" ? permitLimited : activity === "businesses" ? businessLimited : activity === "inspections" ? inspectionLimited : violationLimited;
-  const activeMappedCount = activity === "permits" ? mappedPermitCount : activity === "businesses" ? mappedBusinessCount : activity === "inspections" ? mappedInspectionCount : mappedViolationCount;
-  const activeLocationsCount = activity === "permits" ? permitLocations.length : activity === "businesses" ? businessLocations.length : activity === "inspections" ? inspectionLocations.length : violationLocations.length;
+  const serviceRequestLocations = useMemo(() => {
+    const groups = new Map<string, ServiceRequestLocation>();
+    for (const item of serviceRequests) {
+      const lat = item.latitude;
+      const lon = item.longitude;
+      if (!Number.isFinite(lat) || !Number.isFinite(lon) ||
+          lat < -90 || lat > 90 || lon < -180 || lon > 180) continue;
+      const key = `${lat.toFixed(6)},${lon.toFixed(6)}`;
+      const existing = groups.get(key);
+      if (existing) existing.requests.push(item);
+      else groups.set(key, { key, latitude: lat, longitude: lon, requests: [item] });
+    }
+    return Array.from(groups.values());
+  }, [serviceRequests]);
+
+  const mappedServiceRequestCount = serviceRequestLocations.reduce(
+    (total, location) => total + location.requests.length, 0
+  );
+
+  const filteredVacancyRecords = useMemo(
+    () => vacancyFilter === "all"
+      ? vacancyRecords
+      : vacancyRecords.filter((record) => record.source === vacancyFilter),
+    [vacancyRecords, vacancyFilter]
+  );
+
+  const vacancyLocations = useMemo(() => {
+    const groups = new Map<string, VacancyLocation>();
+    for (const record of filteredVacancyRecords) {
+      const lat = record.latitude;
+      const lon = record.longitude;
+      if (typeof lat !== "number" || typeof lon !== "number" ||
+          !Number.isFinite(lat) || !Number.isFinite(lon) ||
+          lat < -90 || lat > 90 || lon < -180 || lon > 180) continue;
+      // Keep the two source categories separate even at identical coordinates.
+      const key = `${record.source}-${lat.toFixed(6)},${lon.toFixed(6)}`;
+      const existing = groups.get(key);
+      if (existing) existing.records.push(record);
+      else groups.set(key, { key, latitude: lat, longitude: lon, records: [record] });
+    }
+    return Array.from(groups.values());
+  }, [filteredVacancyRecords]);
+
+  const mappedVacancyCount = vacancyLocations.reduce(
+    (total, location) => total + location.records.length, 0
+  );
+  const visibleVacancyCount = vacancyFilter === "modern_311"
+    ? vacancyModernCount
+    : vacancyFilter === "historical_archive"
+      ? vacancyHistoricalCount
+      : vacancyCount;
+
+  const activeLoading = activity === "permits" ? permitLoading : activity === "businesses" ? businessLoading : activity === "inspections" ? inspectionLoading : activity === "vacancy" ? vacancyLoading : activity === "311" ? serviceRequestLoading : violationLoading;
+  const activeError = activity === "permits" ? permitError : activity === "businesses" ? businessError : activity === "inspections" ? inspectionError : activity === "vacancy" ? vacancyError : activity === "311" ? serviceRequestError : violationError;
+  const activeCount = activity === "permits" ? permitCount : activity === "businesses" ? businessCount : activity === "inspections" ? inspectionCount : activity === "vacancy" ? visibleVacancyCount : activity === "311" ? serviceRequestCount : violationCount;
+  const activeLimited = activity === "permits" ? permitLimited : activity === "businesses" ? businessLimited : activity === "inspections" ? inspectionLimited : activity === "vacancy" ? vacancyLimited : activity === "311" ? serviceRequestLimited : violationLimited;
+  const activeMappedCount = activity === "permits" ? mappedPermitCount : activity === "businesses" ? mappedBusinessCount : activity === "inspections" ? mappedInspectionCount : activity === "vacancy" ? mappedVacancyCount : activity === "311" ? mappedServiceRequestCount : mappedViolationCount;
+  const activeLocationsCount = activity === "permits" ? permitLocations.length : activity === "businesses" ? businessLocations.length : activity === "inspections" ? inspectionLocations.length : activity === "vacancy" ? vacancyLocations.length : activity === "311" ? serviceRequestLocations.length : violationLocations.length;
 
   function selectFeature(feature: AreaFeature) {
     const name = getName(feature, layer);
@@ -815,6 +1098,8 @@ export default function ChicagoMap() {
           <option value="businesses">Newly issued business licenses</option>
           <option value="inspections">Food inspections</option>
           <option value="violations">Building violations</option>
+          <option value="311">311 service requests</option>
+          <option value="vacancy">Vacant building reports</option>
         </select>
         <span className="text-xs text-slate-500">One dataset at a time</span>
       </div>
@@ -929,7 +1214,11 @@ export default function ChicagoMap() {
                       ? "Newly issued business licenses"
                       : activity === "inspections"
                         ? "Food inspection activity"
-                        : "Building violation activity"}
+                        : activity === "311"
+                          ? "311 service requests"
+                         : activity === "vacancy"
+                            ? "Vacant building reports"
+                            : "Building violation activity"}
                 </p>
 
                 <p className="mt-2 text-2xl font-bold text-slate-900">
@@ -949,7 +1238,11 @@ export default function ChicagoMap() {
                             ? "licenses"
                             : activity === "inspections"
                               ? "inspections"
-                              : "violations"
+                              : activity === "311"
+                                ? "311 requests"
+                               : activity === "vacancy"
+                                  ? "vacancy reports"
+                                  : "violations"
                       } matched to this neighborhood`
                     : `${
                         activity === "permits"
@@ -958,7 +1251,11 @@ export default function ChicagoMap() {
                             ? "License"
                             : activity === "inspections"
                               ? "Inspection"
-                              : "Violation"
+                              : activity === "311"
+                                ? "311 request"
+                               : activity === "vacancy"
+                                  ? "Vacancy report"
+                                  : "Violation"
                       } records returned for this community area`}
                 </p>
 
@@ -971,7 +1268,11 @@ export default function ChicagoMap() {
 
                 {activeLimited && (
                   <p className="mt-2 text-xs text-amber-800">
-                    Results may be incomplete due to query limits.
+                     {activity === "vacancy"
+                       ? `Showing ${vacancyRecords.length.toLocaleString()} of ${vacancyCount.toLocaleString()} matching reports (combined limit).`
+                       : activity === "311"
+                       ? `Showing the newest ${serviceRequests.length.toLocaleString()} of ${serviceRequestCount.toLocaleString()} matching requests.`
+                       : "Results may be incomplete due to query limits."}
                   </p>
                 )}
               </div>
@@ -992,11 +1293,39 @@ export default function ChicagoMap() {
                     ? "business license"
                     : activity === "inspections"
                       ? "food inspection"
-                      : "building violation"}{" "}
+                      : activity === "311"
+                        ? "311 request"
+                        : activity === "vacancy"
+                          ? "vacancy report"
+                          : "building violation"}{" "}
                 markers
               </label>
 
-              {activity === "inspections" && !inspectionLoading &&
+                              {activity === "vacancy" && (
+                 <p className="mt-5 text-xs leading-5 text-slate-500">
+                   Sources: Chicago 311 Service Requests (v6vf-nfxy) and historical Vacant and Abandoned Buildings
+                   (7nii-7srd). These are reports, not verified current vacancy conditions. The archive ends before
+                   December 18, 2018; the selected time range applies only to modern complaints. Only records with
+                   usable coordinates within the selected boundary appear. Combined results are capped at 2,000.
+                 </p>
+               )}
+
+                              {activity === "311" && (
+<p className="mt-4 text-xs leading-5 text-slate-600">
+                   Reports submitted to Chicago 311 are not independently verified
+                   violations or proof of current conditions. Results require usable coordinates.
+                 </p>
+               )}
+
+               {activity === "vacancy" && (
+                 <div className="mt-4 space-y-2 text-xs leading-5 text-slate-600">
+                   <p><span className="font-semibold text-amber-800">Modern 311 complaints:</span> {vacancyModernCount.toLocaleString()} (last {permitDays} days)</p>
+                   <p><span className="font-semibold text-slate-700">Historical archive:</span> {vacancyHistoricalCount.toLocaleString()} (before Dec 18, 2018)</p>
+                   <p>Reports and complaints are not proof that a building is currently vacant.</p>
+                 </div>
+               )}
+
+               {activity === "inspections" && !inspectionLoading &&
                 !inspectionError && (
                   <div className="mt-4 space-y-1 text-xs text-slate-600">
                     <p>Passed: {inspectionResults.passed}</p>
@@ -1267,7 +1596,86 @@ export default function ChicagoMap() {
                 </CircleMarker>
               ))}
 
-            {selected && showMarkers && activity === "violations" &&
+                         {selected && showMarkers && activity === "311" &&
+               !serviceRequestLoading && !serviceRequestError &&
+               serviceRequestLocations.map((location) => (
+                 <CircleMarker
+                   key={`311-${selectedLocation}-${location.key}`}
+                   center={[location.latitude, location.longitude]}
+                   radius={location.requests.length > 1 ? 9 : 7}
+                   pathOptions={{
+                     color: "#ffffff",
+                     weight: 2,
+                     fillColor: requestStatusColor(location.requests[0].status),
+                     fillOpacity: 0.9,
+                   }}
+                 >
+                   <Popup maxWidth={350} minWidth={230}>
+                     <div className="space-y-3">
+                       <strong className="text-sm">
+                         {location.requests[0].address || "Address unavailable"}
+                       </strong>
+                       <p className="text-xs text-slate-600">
+                         {location.requests.length} 311 {location.requests.length === 1 ? "request" : "requests"} at this location
+                       </p>
+                       <div className="max-h-72 space-y-3 overflow-y-auto">
+                         {location.requests.map((item, index) => (
+                           <div key={`${item.requestNumber}-${index}`} className="border-t border-slate-200 pt-2">
+                             <p className="text-xs font-semibold">{item.type || "311 service request"}</p>
+                             <p className="mt-1 text-xs"><strong>Status:</strong> {item.status || "Unavailable"}</p>
+                             <p className="mt-1 text-xs"><strong>Reported:</strong> {formatDate(item.createdDate)}</p>
+                             <p className="mt-1 text-xs"><strong>Request:</strong> {item.requestNumber || "Unavailable"}</p>
+                             {item.duplicate && <p className="mt-1 text-xs text-amber-800">Marked duplicate by the city</p>}
+                           </div>
+                         ))}
+                       </div>
+                     </div>
+                   </Popup>
+                 </CircleMarker>
+               ))}
+
+             {selected && showMarkers && activity === "vacancy" &&
+               !vacancyLoading && !vacancyError &&
+               vacancyLocations.map((location) => (
+                 <CircleMarker
+                   key={`vacancy-${selectedLocation}-${location.key}`}
+                   center={[location.latitude, location.longitude]}
+                   radius={location.records.length > 1 ? 9 : 7}
+                   pathOptions={{
+                     color: "#ffffff", weight: 2,
+                     fillColor: vacancySourceColor(location.records[0].source),
+                     fillOpacity: 0.9,
+                   }}
+                 >
+                   <Popup maxWidth={350} minWidth={230}>
+                     <div className="space-y-3">
+                       <strong className="text-sm">{location.records[0].address || "Address unavailable"}</strong>
+                       <p className="text-xs text-slate-600">
+                         {location.records.length} {vacancySourceName(location.records[0].source).toLowerCase()}
+                         {location.records.length === 1 ? "" : "s"} at this location
+                       </p>
+                       <div className="max-h-72 space-y-3 overflow-y-auto">
+                         {location.records.map((record, index) => (
+                           <div key={`${record.source}-${record.id}-${index}`} className="border-t border-slate-200 pt-2">
+                             <p className="text-xs font-semibold" style={{ color: vacancySourceColor(record.source) }}>
+                               {vacancySourceName(record.source)}
+                             </p>
+                             <p className="mt-1 text-xs"><strong>Reported:</strong> {formatDate(record.date)}</p>
+                             <p className="mt-1 text-xs"><strong>Request:</strong> {record.id || "Unavailable"}</p>
+                             {record.source === "modern_311" && <p className="mt-1 text-xs"><strong>311 status:</strong> {record.status || "Unavailable"}</p>}
+                             {record.source === "historical_archive" && <p className="mt-1 text-xs">Historical report — current vacancy unknown</p>}
+                             {Object.entries(record.details || {}).map(([key, value]) => (
+                               <p key={key} className="mt-1 text-xs"><strong>{key}:</strong> {value}</p>
+                             ))}
+                           </div>
+                         ))}
+                       </div>
+                     </div>
+                   </Popup>
+                 </CircleMarker>
+               ))}
+
+             {selected && showMarkers && activity === "violations" &&
               !violationLoading && !violationError &&
               violationLocations.map((location) => (
                 <CircleMarker
@@ -1325,7 +1733,11 @@ export default function ChicagoMap() {
                     ? "Recently Issued Business Licenses"
                     : activity === "inspections"
                       ? "Recent Food Inspections"
-                      : "Recent Building Violations"}
+                                             : activity === "311"
+                         ? "Recent 311 Service Requests"
+                         : activity === "vacancy"
+                           ? "Vacant Building Reports"
+                           : "Recent Building Violations"}
               </h2>
 
               <p className="mt-1 text-sm text-slate-600">
@@ -1361,6 +1773,38 @@ export default function ChicagoMap() {
             </div>
           </div>
 
+          {activity === "311" && (
+            <div className="flex flex-wrap items-center gap-2">
+              <label htmlFor="311-type" className="text-sm font-medium text-slate-700">Request type</label>
+              <select id="311-type" value={requestType}
+                onChange={(event) => setRequestType(event.target.value)}
+                className="max-w-[260px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900">
+                {REQUEST_TYPES.map((type) => (
+                  <option key={type} value={type}>{type === "all" ? "All request types" : type}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+           {activity === "vacancy" && (
+             <div className="mt-4 space-y-3">
+               <div className="flex flex-wrap items-center gap-2">
+                 <label htmlFor="vacancy-source" className="text-sm font-medium text-slate-700">Report source</label>
+                 <select id="vacancy-source" value={vacancyFilter}
+                   onChange={(event) => setVacancyFilter(event.target.value as VacancyFilter)}
+                   className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900">
+                   <option value="all">All reports</option>
+                   <option value="modern_311">Modern 311 complaints</option>
+                   <option value="historical_archive">Historical archive</option>
+                 </select>
+               </div>
+               <p className="text-xs leading-5 text-slate-600">
+                 Time range applies only to modern 311 complaints. Historical archive records are from before December 18, 2018.
+                 Orange markers indicate modern complaints; gray markers indicate historical reports.
+               </p>
+             </div>
+           )}
+
           {activeLoading && (
             <p className="mt-6 text-sm text-slate-600">
               Loading records...
@@ -1387,7 +1831,11 @@ export default function ChicagoMap() {
 
                 {activeLimited && (
                   <span className="font-medium text-amber-700">
-                    Results may be incomplete
+                     {activity === "vacancy"
+                       ? `Showing ${filteredVacancyRecords.length.toLocaleString()} of ${visibleVacancyCount.toLocaleString()} matching source reports (combined limit)`
+                       : activity === "311"
+                       ? `Showing ${serviceRequests.length.toLocaleString()} of ${serviceRequestCount.toLocaleString()}`
+                       : "Results may be incomplete"}
                   </span>
                 )}
               </div>
@@ -1438,19 +1886,59 @@ export default function ChicagoMap() {
                 </div>
               )}
 
+               {activity === "vacancy" && (
+                 <div className="mt-4 flex flex-wrap gap-2 text-xs">
+                   <span className="rounded-full bg-amber-50 px-3 py-1 font-medium text-amber-800">Modern 311: {vacancyModernCount.toLocaleString()}</span>
+                   <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-700">Historical archive: {vacancyHistoricalCount.toLocaleString()}</span>
+                 </div>
+               )}
+
               {activeCount === 0 ? (
                 <div className="mt-6 rounded-lg bg-slate-50 p-6 text-center">
                   <p className="text-sm font-medium text-slate-700">
                     No records found for this location and time range.
                   </p>
                   <p className="mt-2 text-xs text-slate-500">
-                    Try selecting a longer time range.
+                     {activity === "vacancy" && vacancyFilter === "historical_archive"
+                       ? "No historical reports were found within this boundary."
+                       : "Try selecting a longer time range or another report source."}
                   </p>
                 </div>
               ) : (
                 <div className="mt-5 max-h-[680px] space-y-3 overflow-y-auto pr-1">
-                  {activity === "permits" &&
-                    permits.map((permit, index) => (
+                   {activity === "vacancy" &&
+                     filteredVacancyRecords.map((record, index) => (
+                       <article key={`${record.source}-${record.id}-${index}`} className="rounded-lg border border-slate-200 p-4">
+                         <div className="flex flex-wrap items-start justify-between gap-3">
+                           <div>
+                             <h3 className="font-semibold text-slate-900">{record.address || "Address unavailable"}</h3>
+                             <p className="mt-1 text-sm text-slate-600">{record.type || "Vacant-building report"}</p>
+                           </div>
+                           <span className={`rounded-full px-3 py-1 text-xs font-medium ${record.source === "modern_311" ? "bg-amber-50 text-amber-800" : "bg-slate-100 text-slate-700"}`}>
+                             {vacancySourceName(record.source)}
+                           </span>
+                         </div>
+                         <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
+                           <p><strong>Reported:</strong> {formatDate(record.date)}</p>
+                           <p><strong>Request number:</strong> {record.id || "Unavailable"}</p>
+                           {record.source === "modern_311" && <p><strong>311 status:</strong> {record.status || "Unavailable"}</p>}
+                           {record.source === "historical_archive" && <p><strong>Current vacancy:</strong> Unknown (archival report)</p>}
+                         </div>
+                         {Object.keys(record.details || {}).length > 0 && (
+                           <details className="mt-3 rounded-lg bg-slate-50 p-3 text-xs text-slate-700">
+                             <summary className="cursor-pointer font-semibold text-blue-700">Report details</summary>
+                             <div className="mt-2 space-y-1">
+                               {Object.entries(record.details).map(([key, value]) => (
+                                 <p key={key}><strong>{key}:</strong> {value}</p>
+                               ))}
+                             </div>
+                           </details>
+                         )}
+                       </article>
+                     ))}
+
+                   {activity === "permits" &&
+                     permits.map((permit, index) => (
                       <article
                         key={`${permit.permitNumber}-${index}`}
                         className="rounded-lg border border-slate-200 p-4"
@@ -1607,8 +2095,36 @@ export default function ChicagoMap() {
                       </article>
                     ))}
 
-                  {activity === "violations" &&
-                    violations.map((violation, index) => (
+                                     {activity === "311" &&
+                     serviceRequests.map((item, index) => (
+                       <article
+                         key={`${item.requestNumber}-${index}`}
+                         className="rounded-lg border border-slate-200 p-4"
+                       >
+                         <div className="flex flex-wrap items-start justify-between gap-3">
+                           <div>
+                             <h3 className="font-semibold text-slate-900">
+                               {item.type || "311 service request"}
+                             </h3>
+                             <p className="mt-1 text-sm text-slate-600">
+                               {item.address || "Address unavailable"}
+                             </p>
+                           </div>
+                           <span className={`rounded-full px-3 py-1 text-xs font-medium ${requestStatusBadge(item.status)}`}>
+                             {item.status || "Unknown"}
+                           </span>
+                         </div>
+                         <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
+                           <p><strong>Reported:</strong> {formatDate(item.createdDate)}</p>
+                           <p><strong>Closed:</strong> {formatDate(item.closedDate)}</p>
+                           <p><strong>Request number:</strong> {item.requestNumber || "Unavailable"}</p>
+                           <p><strong>City duplicate flag:</strong> {item.duplicate ? "Yes" : "No"}</p>
+                         </div>
+                       </article>
+                     ))}
+
+                   {activity === "violations" &&
+                     violations.map((violation, index) => (
                       <article
                         key={`${violation.id}-${index}`}
                         className="rounded-lg border border-slate-200 p-4"
@@ -1676,8 +2192,18 @@ export default function ChicagoMap() {
                 </div>
               )}
 
-              {activity === "violations" && (
-                <p className="mt-5 text-xs leading-5 text-slate-500">
+                             {activity === "311" && (
+                 <p className="mt-5 text-xs leading-5 text-slate-500">
+                   Source: City of Chicago 311 Service Requests (v6vf-nfxy).
+                   Requests are reports, not confirmed findings or proof of current conditions.
+                   Duplicate-flagged records may be included. Geographic results exclude
+                   records without usable coordinates. When limited, the list and markers
+                   show the newest 2,000 matches while the count reflects all matches.
+                 </p>
+               )}
+
+               {activity === "violations" && (
+                 <p className="mt-5 text-xs leading-5 text-slate-500">
                   Building violation statuses reflect the city's
                   published records and may have changed since
                   the last update. An open violation does not
