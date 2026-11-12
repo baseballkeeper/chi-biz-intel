@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -67,6 +68,32 @@ type ServiceRequestData = {
   note: string;
 };
 
+type VacancyReport = {
+  requestNumber: string;
+  type: string;
+  date: string;
+  address: string;
+  reportedOccupancy: string;
+  openOrBoarded: string;
+  reportedHazard: string;
+  fireRelated: boolean;
+  buildingLocation: string;
+  latitude: number | null;
+  longitude: number | null;
+  source: "historical-311";
+};
+
+type VacancyData = {
+  summary: {
+    historicalReports: number;
+    reportedVacant: number;
+    reportedOccupied: number;
+  };
+  records: VacancyReport[];
+  complete: boolean;
+  note: string;
+};
+
 type PropertyData = {
   address: string;
   summary: {
@@ -89,7 +116,10 @@ type Category =
   | "permit"
   | "license"
   | "inspection"
-  | "311";
+  | "311"
+  | "vacancy";
+
+type Filter = Category | "all";
 
 type TimelineItem = {
   id: string;
@@ -100,10 +130,14 @@ type TimelineItem = {
   status: string;
   details: string;
   metadata: string[];
+  isVacancyReport?: boolean;
 };
 
+const VACANCY_REQUEST_TYPE =
+  "Vacant/Abandoned Building Complaint";
+
 const categories: {
-  id: Category | "all";
+  id: Filter;
   label: string;
 }[] = [
   { id: "all", label: "All activity" },
@@ -112,12 +146,15 @@ const categories: {
   { id: "license", label: "Licenses" },
   { id: "inspection", label: "Food inspections" },
   { id: "311", label: "311 requests" },
+  { id: "vacancy", label: "Vacant building reports" },
 ];
 
 function formatDate(value: string): string {
   if (!value) return "Date unavailable";
 
-  const date = new Date(`${value.slice(0, 10)}T12:00:00`);
+  const date = new Date(
+    `${value.slice(0, 10)}T12:00:00`
+  );
 
   if (Number.isNaN(date.getTime())) {
     return "Date unavailable";
@@ -152,6 +189,8 @@ function categoryLabel(category: Category): string {
       return "Food inspection";
     case "311":
       return "311 service request";
+    case "vacancy":
+      return "Historical vacancy report";
   }
 }
 
@@ -167,10 +206,16 @@ function categoryStyle(category: Category): string {
       return "bg-amber-50 text-amber-700";
     case "311":
       return "bg-teal-50 text-teal-700";
+    case "vacancy":
+      return "bg-orange-50 text-orange-700";
   }
 }
 
-function buildTimeline(data: PropertyData, requests: ServiceRequestData | null): TimelineItem[] {
+function buildTimeline(
+  data: PropertyData,
+  requests: ServiceRequestData | null,
+  vacancy: VacancyData | null
+): TimelineItem[] {
   const items: TimelineItem[] = [];
 
   for (const record of data.violations.records) {
@@ -186,7 +231,9 @@ function buildTimeline(data: PropertyData, requests: ServiceRequestData | null):
         "No inspector comments available.",
       metadata: [
         `Violation ID: ${record.id}`,
-        `Inspection result: ${record.inspectionStatus || "Not reported"}`,
+        `Inspection result: ${
+          record.inspectionStatus || "Not reported"
+        }`,
       ],
     });
   }
@@ -205,9 +252,13 @@ function buildTimeline(data: PropertyData, requests: ServiceRequestData | null):
         record.workDescription ||
         "No work description available.",
       metadata: [
-        `Application: ${formatDate(record.applicationStartDate)}`,
+        `Application: ${formatDate(
+          record.applicationStartDate
+        )}`,
         `Issued: ${formatDate(record.issueDate)}`,
-        `Reported cost: ${formatMoney(record.reportedCost)}`,
+        `Reported cost: ${formatMoney(
+          record.reportedCost
+        )}`,
       ],
     });
   }
@@ -221,9 +272,12 @@ function buildTimeline(data: PropertyData, requests: ServiceRequestData | null):
       subtitle:
         record.licenseDescription ||
         `License ${record.licenseId}`,
-      status: record.applicationType || "Not reported",
+      status:
+        record.applicationType || "Not reported",
       details:
-        `License status code: ${record.licenseStatus || "Not reported"}`,
+        `License status code: ${
+          record.licenseStatus || "Not reported"
+        }`,
       metadata: [
         `License ID: ${record.licenseId}`,
         `Recorded address: ${record.address}`,
@@ -250,21 +304,74 @@ function buildTimeline(data: PropertyData, requests: ServiceRequestData | null):
     });
   }
 
+  // Modern vacancy complaints remain regular 311 records.
+  // We flag them for the vacancy filter rather than
+  // inserting another copy into the timeline.
+
   for (const record of requests?.records ?? []) {
+    const isVacancy =
+      record.type === VACANCY_REQUEST_TYPE;
+
     items.push({
       id: `311-${record.requestNumber}`,
       category: "311",
+      isVacancyReport: isVacancy,
       date: record.createdDate,
       title: record.type || "311 service request",
       subtitle: `Request ${record.requestNumber}`,
       status: record.status || "Not reported",
-      details: "This is a reported service request, not a verified property violation. The request may concern public infrastructure or services associated with this address.",
+      details: isVacancy
+        ? "This is a vacant/abandoned building complaint submitted through Chicago 311. The complaint does not establish that the building was vacant, and its completion status does not verify current occupancy."
+        : "This is a reported service request, not a verified property violation. The request may concern public infrastructure or services associated with this address.",
       metadata: [
         `Request number: ${record.requestNumber}`,
-        `Recorded address: ${record.address || "Not reported"}`,
+        `Recorded address: ${
+          record.address || "Not reported"
+        }`,
         `Closed: ${formatDate(record.closedDate)}`,
-        `Duplicate flag: ${record.duplicate ? "Yes" : "No"}`,
+        `Duplicate flag: ${
+          record.duplicate ? "Yes" : "No"
+        }`,
         `Ward: ${record.ward || "Not reported"}`,
+        "Source: Modern Chicago 311 service requests",
+      ],
+    });
+  }
+
+  // Historical vacancy reports are additional records.
+  // Their separate category keeps them distinct from
+  // modern 311 complaints.
+
+  for (const record of vacancy?.records ?? []) {
+    items.push({
+      id: `vacancy-historical-${record.requestNumber}`,
+      category: "vacancy",
+      isVacancyReport: true,
+      date: record.date,
+      title:
+        "Historical vacant/abandoned building report",
+      subtitle: `Request ${record.requestNumber}`,
+      status:
+        `Reported ${record.reportedOccupancy.toLowerCase()}`,
+      details:
+        "This historical report describes conditions reported at the time. It does not establish the property's current occupancy or condition.",
+      metadata: [
+        `Request number: ${record.requestNumber}`,
+        `Reported occupancy: ${
+          record.reportedOccupancy
+        }`,
+        `Open or boarded: ${record.openOrBoarded}`,
+        `Reported hazard: ${record.reportedHazard}`,
+        `Fire-related flag: ${
+          record.fireRelated
+            ? "Yes"
+            : "No / not recorded"
+        }`,
+        `Building location: ${
+          record.buildingLocation || "Not reported"
+        }`,
+        `Recorded address: ${record.address}`,
+        "Source: Historical Chicago vacant and abandoned buildings reports",
       ],
     });
   }
@@ -278,23 +385,36 @@ export default function PropertyPage() {
   const [address, setAddress] = useState(
     "1601 N Milwaukee Ave"
   );
-  const [searchedAddress, setSearchedAddress] = useState(
-    "1601 N Milwaukee Ave"
-  );
-  const [data, setData] = useState<PropertyData | null>(
-    null
-  );
-  const [requests, setRequests] = useState<ServiceRequestData | null>(null);
-  const [requestsError, setRequestsError] = useState("");
+
+  const [searchedAddress, setSearchedAddress] =
+    useState("1601 N Milwaukee Ave");
+
+  const [data, setData] =
+    useState<PropertyData | null>(null);
+
+  const [requests, setRequests] =
+    useState<ServiceRequestData | null>(null);
+
+  const [vacancy, setVacancy] =
+    useState<VacancyData | null>(null);
+
+  const [requestsError, setRequestsError] =
+    useState("");
+
+  const [vacancyError, setVacancyError] =
+    useState("");
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [filter, setFilter] = useState<
-    Category | "all"
-  >("all");
-  const [expanded, setExpanded] = useState<
-    string | null
-  >(null);
-  const [visibleCount, setVisibleCount] = useState(25);
+
+  const [filter, setFilter] =
+    useState<Filter>("all");
+
+  const [expanded, setExpanded] =
+    useState<string | null>(null);
+
+  const [visibleCount, setVisibleCount] =
+    useState(25);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -304,39 +424,90 @@ export default function PropertyPage() {
       setError("");
       setData(null);
       setRequests(null);
+      setVacancy(null);
       setRequestsError("");
+      setVacancyError("");
 
       try {
-        const query = encodeURIComponent(searchedAddress);
-        const [propertyResult, requestsResult] = await Promise.allSettled([
-          fetch(`/api/property?address=${query}`, { signal: controller.signal })
-            .then(async (response) => {
-              const body = await response.json();
-              if (!response.ok) {
-                throw new Error(body.error || "Unable to load property records.");
-              }
-              return body as PropertyData;
-            }),
-          fetch(`/api/property-311?address=${query}`, { signal: controller.signal })
-            .then(async (response) => {
-              const body = await response.json();
-              if (!response.ok) {
-                throw new Error(body.error || "Unable to load 311 requests.");
-              }
-              return body as ServiceRequestData;
-            }),
+        const query =
+          encodeURIComponent(searchedAddress);
+
+        const [
+          propertyResult,
+          requestsResult,
+          vacancyResult,
+        ] = await Promise.allSettled([
+          fetch(
+            `/api/property?address=${query}`,
+            { signal: controller.signal }
+          ).then(async (response) => {
+            const body = await response.json();
+
+            if (!response.ok) {
+              throw new Error(
+                body.error ||
+                  "Unable to load property records."
+              );
+            }
+
+            return body as PropertyData;
+          }),
+
+          fetch(
+            `/api/property-311?address=${query}`,
+            { signal: controller.signal }
+          ).then(async (response) => {
+            const body = await response.json();
+
+            if (!response.ok) {
+              throw new Error(
+                body.error ||
+                  "Unable to load 311 requests."
+              );
+            }
+
+            return body as ServiceRequestData;
+          }),
+
+          fetch(
+            `/api/property-vacancy?address=${query}`,
+            { signal: controller.signal }
+          ).then(async (response) => {
+            const body = await response.json();
+
+            if (!response.ok) {
+              throw new Error(
+                body.error ||
+                  "Unable to load historical vacancy reports."
+              );
+            }
+
+            return body as VacancyData;
+          }),
         ]);
 
         if (controller.signal.aborted) return;
+
         if (propertyResult.status === "rejected") {
           throw propertyResult.reason;
         }
+
         setData(propertyResult.value);
 
         if (requestsResult.status === "fulfilled") {
           setRequests(requestsResult.value);
         } else {
-          setRequestsError("311 requests are temporarily unavailable. Other property records are still shown.");
+          setRequestsError(
+            "311 requests are temporarily unavailable. Other property records are still shown."
+          );
+        }
+
+        if (vacancyResult.status === "fulfilled") {
+          setVacancy(vacancyResult.value);
+        } else {
+          setVacancyError(
+            "Historical vacancy reports are temporarily unavailable. Other property records are still shown."
+          );
         }
       } catch (err) {
         if (controller.signal.aborted) return;
@@ -359,26 +530,52 @@ export default function PropertyPage() {
   }, [searchedAddress]);
 
   const timeline = useMemo(
-    () => (data ? buildTimeline(data, requests) : []),
-    [data, requests]
-  );
-
-  const filteredTimeline = useMemo(
     () =>
-      filter === "all"
-        ? timeline
-        : timeline.filter(
-            (item) => item.category === filter
-          ),
-    [timeline, filter]
+      data
+        ? buildTimeline(data, requests, vacancy)
+        : [],
+    [data, requests, vacancy]
   );
 
-  const visibleTimeline = filteredTimeline.slice(
-    0,
-    visibleCount
+  const modernVacancyCount = useMemo(
+    () =>
+      requests?.records.filter(
+        (record) =>
+          record.type === VACANCY_REQUEST_TYPE
+      ).length ?? 0,
+    [requests]
   );
 
-  function searchProperty(event: React.FormEvent) {
+  const historicalVacancyCount =
+    vacancy?.records.length ?? 0;
+
+  const totalVacancyCount =
+    requests && vacancy
+      ? modernVacancyCount + historicalVacancyCount
+      : null;
+
+  const filteredTimeline = useMemo(() => {
+    if (filter === "all") {
+      return timeline;
+    }
+
+    if (filter === "vacancy") {
+      return timeline.filter(
+        (item) => item.isVacancyReport === true
+      );
+    }
+
+    return timeline.filter(
+      (item) => item.category === filter
+    );
+  }, [timeline, filter]);
+
+  const visibleTimeline =
+    filteredTimeline.slice(0, visibleCount);
+
+  function searchProperty(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
     event.preventDefault();
 
     const nextAddress = address.trim();
@@ -391,11 +588,51 @@ export default function PropertyPage() {
     setSearchedAddress(nextAddress);
   }
 
-  function selectFilter(nextFilter: Category | "all") {
+  function selectFilter(nextFilter: Filter) {
     setFilter(nextFilter);
     setExpanded(null);
     setVisibleCount(25);
   }
+
+  const summaryCards: {
+    label: string;
+    value: number | null;
+    category: Category;
+  }[] = data
+    ? [
+        {
+          label: "Building violations",
+          value: data.summary.buildingViolations,
+          category: "violation",
+        },
+        {
+          label: "Building permits",
+          value: data.summary.buildingPermits,
+          category: "permit",
+        },
+        {
+          label: "Business licenses",
+          value: data.summary.businessLicenses,
+          category: "license",
+        },
+        {
+          label: "Food inspections",
+          value: data.summary.foodInspections,
+          category: "inspection",
+        },
+        {
+          label: "311 requests",
+          value:
+            requests?.summary.totalRequests ?? null,
+          category: "311",
+        },
+        {
+          label: "Vacant building reports",
+          value: totalVacancyCount,
+          category: "vacancy",
+        },
+      ]
+    : [];
 
   return (
     <main className="min-h-screen bg-white text-slate-900">
@@ -419,7 +656,8 @@ export default function PropertyPage() {
           <p className="mt-5 max-w-3xl text-lg leading-8 text-slate-600">
             Search an address to explore building permits,
             code violations, business licenses, food
-            inspections, and 311 service requests in one place.
+            inspections, 311 service requests, and
+            vacant-building reports in one place.
           </p>
 
           <form
@@ -442,13 +680,15 @@ export default function PropertyPage() {
               disabled={loading}
               className="rounded-lg bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {loading ? "Searching..." : "Search property"}
+              {loading
+                ? "Searching..."
+                : "Search property"}
             </button>
           </form>
 
           <p className="mt-3 text-sm text-slate-500">
-            Include the street number and direction, such as
-            1601 N Milwaukee Ave.
+            Include the street number and direction,
+            such as 1601 N Milwaukee Ave.
           </p>
         </div>
       </section>
@@ -468,7 +708,10 @@ export default function PropertyPage() {
             <h2 className="font-semibold">
               Property lookup failed
             </h2>
-            <p className="mt-2 text-sm">{error}</p>
+
+            <p className="mt-2 text-sm">
+              {error}
+            </p>
           </div>
         )}
 
@@ -487,58 +730,61 @@ export default function PropertyPage() {
                 {data.complete
                   ? "All matching property query results retrieved"
                   : "Some source results may be incomplete"}
-                {" | "} Updated {formatDate(data.refreshedAt)}
+                {" | "} Updated{" "}
+                {formatDate(data.refreshedAt)}
               </p>
             </div>
 
             {requestsError && (
-              <p role="status" className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              <p
+                role="status"
+                className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
+              >
                 {requestsError}
               </p>
             )}
 
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-              {[
-                {
-                  label: "Building violations",
-                  value: data.summary.buildingViolations,
-                  category: "violation" as const,
-                },
-                {
-                  label: "Building permits",
-                  value: data.summary.buildingPermits,
-                  category: "permit" as const,
-                },
-                {
-                  label: "Business licenses",
-                  value: data.summary.businessLicenses,
-                  category: "license" as const,
-                },
-                {
-                  label: "Food inspections",
-                  value: data.summary.foodInspections,
-                  category: "inspection" as const,
-                },
-                {
-                  label: "311 requests",
-                  value: requests?.summary.totalRequests ?? null,
-                  category: "311" as const,
-                },
-              ].map((item) => (
+            {vacancyError && (
+              <p
+                role="status"
+                className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
+              >
+                {vacancyError}
+              </p>
+            )}
+
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+              {summaryCards.map((item) => (
                 <button
                   key={item.category}
                   type="button"
                   onClick={() =>
                     selectFilter(item.category)
                   }
-                  className="rounded-2xl border border-slate-200 bg-white p-6 text-left shadow-sm transition hover:border-blue-400 hover:shadow-md"
+                  className="rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-blue-400 hover:shadow-md"
                 >
                   <p className="text-sm font-medium text-slate-600">
                     {item.label}
                   </p>
+
                   <p className="mt-3 text-4xl font-bold tracking-tight">
-                    {item.value === null ? "Unavailable" : item.value.toLocaleString()}
+                    {item.value === null
+                      ? "N/A"
+                      : item.value.toLocaleString()}
                   </p>
+
+                  {item.category === "vacancy" && (
+                    <p className="mt-2 text-xs text-slate-500">
+                      {vacancy
+                        ? `${historicalVacancyCount} historical`
+                        : "Historical unavailable"}
+                      {" | "}
+                      {requests
+                        ? `${modernVacancyCount} modern 311`
+                        : "Modern unavailable"}
+                    </p>
+                  )}
+
                   <p className="mt-3 text-sm font-semibold text-blue-700">
                     View records &rarr;
                   </p>
@@ -556,7 +802,12 @@ export default function PropertyPage() {
                   <p className="mt-2 text-sm text-slate-600">
                     {filteredTimeline.length.toLocaleString()}{" "}
                     matching records, newest first.
-                    {requests && !requests.complete && " 311 results may be incomplete."}
+                    {requests &&
+                      !requests.complete &&
+                      " 311 results may be incomplete."}
+                    {vacancy &&
+                      !vacancy.complete &&
+                      " Historical vacancy results may be incomplete."}
                   </p>
                 </div>
               </div>
@@ -583,6 +834,8 @@ export default function PropertyPage() {
               {filteredTimeline.length === 0 ? (
                 <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-8 text-sm text-slate-600">
                   No matching records found in this category.
+                  {(requestsError || vacancyError) &&
+                    " Some sources are temporarily unavailable."}
                 </div>
               ) : (
                 <div className="mt-6 space-y-3">
@@ -599,7 +852,9 @@ export default function PropertyPage() {
                           type="button"
                           onClick={() =>
                             setExpanded(
-                              isExpanded ? null : item.id
+                              isExpanded
+                                ? null
+                                : item.id
                             )
                           }
                           aria-expanded={isExpanded}
@@ -609,9 +864,13 @@ export default function PropertyPage() {
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-2">
                                 <span
-                                  className={`rounded-full px-3 py-1 text-xs font-semibold ${categoryStyle(item.category)}`}
+                                  className={`rounded-full px-3 py-1 text-xs font-semibold ${categoryStyle(
+                                    item.category
+                                  )}`}
                                 >
-                                  {categoryLabel(item.category)}
+                                  {categoryLabel(
+                                    item.category
+                                  )}
                                 </span>
 
                                 <span className="text-xs text-slate-500">
@@ -670,7 +929,8 @@ export default function PropertyPage() {
                 </div>
               )}
 
-              {visibleCount < filteredTimeline.length && (
+              {visibleCount <
+                filteredTimeline.length && (
                 <div className="mt-8 text-center">
                   <button
                     type="button"
@@ -707,10 +967,40 @@ export default function PropertyPage() {
               </p>
 
               <p className="mt-3 text-sm leading-7 text-slate-600">
-                311 requests are public reports and do not establish that a violation occurred.
-                Some refer to nearby streets, infrastructure, businesses, or services.
-                {requests && ` ${requests.summary.duplicateRequests.toLocaleString()} requests are flagged as duplicates by the city.`}
-                {requests && !requests.complete && " The 311 search reached its retrieval limit; its count may be understated."}
+                311 requests are public reports and do
+                not establish that a violation occurred.
+                Some refer to nearby streets,
+                infrastructure, businesses, or services.
+                {requests &&
+                  ` ${requests.summary.duplicateRequests.toLocaleString()} requests are flagged as duplicates by the city.`}
+                {requests &&
+                  !requests.complete &&
+                  " The 311 search reached its retrieval limit; its count may be understated."}
+              </p>
+
+              <p className="mt-3 text-sm leading-7 text-slate-600">
+                Vacant-building reports combine
+                historical City of Chicago records
+                with modern 311 vacant/abandoned
+                building complaints. These counts
+                represent source records, not
+                verified distinct incidents or
+                currently vacant buildings.
+                Historical and modern records may
+                describe the same incident.
+                Modern complaints already appear
+                under 311 requests and are not
+                added twice to All activity.
+                Completed requests do not verify
+                that a building was vacant.
+                Historical reported conditions
+                do not establish present-day
+                conditions.
+                {vacancy &&
+                  !vacancy.complete &&
+                  " Historical vacancy results may be incomplete."}
+                {(!requests || !vacancy) &&
+                  " The combined vacancy count is unavailable because one or more sources could not be loaded."}
               </p>
 
               <a
@@ -728,4 +1018,3 @@ export default function PropertyPage() {
     </main>
   );
 }
-
