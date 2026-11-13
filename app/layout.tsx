@@ -26,6 +26,7 @@ export const metadata: Metadata = {
 
 const navigation = [
   { label: "Property", href: "/property" },
+  { label: "Activity", href: "/activity" },
   { label: "Permits", href: "/permits" },
   { label: "Businesses", href: "/businesses" },
   { label: "About", href: "/about" },
@@ -70,7 +71,7 @@ export default function RootLayout({
                   className="ml-1 inline-flex items-center gap-2 rounded-lg bg-blue-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
                 >
                   Explore Map
-                  <span aria-hidden="true">↗</span>
+                  <span aria-hidden="true">&nearr;</span>
                 </Link>
               </nav>
             </div>
@@ -80,87 +81,88 @@ export default function RootLayout({
             {children}
           </main>
 
-          
-<footer className="border-t border-slate-800 bg-slate-900 text-slate-300">
-  <div className="mx-auto max-w-7xl px-6 py-10">
-    <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr]">
-      <div>
-        <Link
-          href="/"
-          className="text-xl font-bold tracking-tight text-white"
-        >
-          MetroSift
-        </Link>
+          <footer className="border-t border-slate-800 bg-slate-900 text-slate-300">
+            <div className="mx-auto max-w-7xl px-6 py-10">
+              <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr]">
+                <div>
+                  <Link
+                    href="/"
+                    className="text-xl font-bold tracking-tight text-white"
+                  >
+                    MetroSift
+                  </Link>
 
-        <p className="mt-2 text-sm text-slate-300">
-          Find the signal in your city.
-        </p>
-      </div>
+                  <p className="mt-2 text-sm text-slate-300">
+                    Find the signal in your city.
+                  </p>
+                </div>
 
-      <nav aria-label="Platform links">
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400">
-          Platform
-        </h2>
+                <nav aria-label="Platform links">
+                  <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400">
+                    Platform
+                  </h2>
 
-        <div className="flex flex-col items-start gap-2 text-sm">
-          <Link href="/about" className="hover:text-white">
-            About
-          </Link>
-          <Link href="/contact" className="hover:text-white">
-            Contact
-          </Link>
-        </div>
-      </nav>
+                  <div className="flex flex-col items-start gap-2 text-sm">
+                    <Link href="/about" className="hover:text-white">
+                      About
+                    </Link>
+                    <Link href="/contact" className="hover:text-white">
+                      Contact
+                    </Link>
+                  </div>
+                </nav>
 
-      <nav aria-label="Resources and legal links">
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400">
-          Resources &amp; Legal
-        </h2>
+                <nav aria-label="Resources and legal links">
+                  <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400">
+                    Resources &amp; Legal
+                  </h2>
 
-        <div className="flex flex-col items-start gap-2 text-sm">
-          <Link href="/methodology" className="hover:text-white">
-            Data &amp; Methodology
-          </Link>
-          <Link href="/terms" className="hover:text-white">
-            Terms of Use
-          </Link>
-          <Link href="/privacy" className="hover:text-white">
-            Privacy Policy
-          </Link>
-        </div>
-      </nav>
-    </div>
+                  <div className="flex flex-col items-start gap-2 text-sm">
+                    <Link
+                      href="/methodology"
+                      className="hover:text-white"
+                    >
+                      Data &amp; Methodology
+                    </Link>
+                    <Link href="/terms" className="hover:text-white">
+                      Terms of Use
+                    </Link>
+                    <Link href="/privacy" className="hover:text-white">
+                      Privacy Policy
+                    </Link>
+                  </div>
+                </nav>
+              </div>
 
-    <div className="mt-8 border-t border-slate-700 pt-5">
-      <p className="max-w-5xl text-xs leading-6 text-slate-400">
-        MetroSift is an independent information platform and is not
-        affiliated with or endorsed by the City of Chicago. Public
-        records may be incomplete, delayed, or subsequently updated.
-        Reports, applications, and complaints do not necessarily
-        represent verified conditions or completed activity.
-        Refer to original government records for authoritative
-        information.
-      </p>
-    </div>
+              <div className="mt-8 border-t border-slate-700 pt-5">
+                <p className="max-w-5xl text-xs leading-6 text-slate-400">
+                  MetroSift is an independent information platform and is
+                  not affiliated with or endorsed by the City of Chicago.
+                  Public records may be incomplete, delayed, or
+                  subsequently updated. Reports, applications, and
+                  complaints do not necessarily represent verified
+                  conditions or completed activity. Refer to original
+                  government records for authoritative information.
+                </p>
+              </div>
 
-    <div className="mt-5 flex flex-col justify-between gap-3 text-xs text-slate-400 sm:flex-row">
-      <span>
-        © {new Date().getFullYear()} MetroSift.
-        All rights reserved.
-      </span>
+              <div className="mt-5 flex flex-col justify-between gap-3 text-xs text-slate-400 sm:flex-row">
+                <span>
+                  &copy; {new Date().getFullYear()} MetroSift.
+                  All rights reserved.
+                </span>
 
-      <a
-        href="https://data.cityofchicago.org/"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-slate-300 transition hover:text-white"
-      >
-        City of Chicago Open Data Portal ↗
-      </a>
-    </div>
-  </div>
-</footer>
-
+                <a
+                  href="https://data.cityofchicago.org/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-slate-300 transition hover:text-white"
+                >
+                  City of Chicago Open Data Portal &nearr;
+                </a>
+              </div>
+            </div>
+          </footer>
         </div>
       </body>
     </html>
