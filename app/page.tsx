@@ -50,17 +50,10 @@ const tools = [
   },
 ];
 
-const upcoming = [
-  {
-    title: "Neighborhood Trends",
-    description:
-      "Explore additional indicators and changes across Chicago neighborhoods.",
-  },
-];
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-white text-slate-900">
+    <div className="bg-white text-slate-900">
       <section className="border-b border-slate-200 bg-slate-50">
         <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 py-16 lg:grid-cols-2 lg:gap-14 lg:py-20">
           <div>
@@ -73,13 +66,13 @@ export default function Home() {
             </h1>
 
             <p className="mt-6 text-lg leading-8 text-slate-600">
-              Explore business licenses, construction permits, property records,
-              and neighborhood changes in one place.
+              Explore business licenses, construction permits, property
+              records, and neighborhood changes in one place.
             </p>
 
             <p className="mt-4 text-slate-600">
-              Research the locations that matter to your business, from individual
-              properties to entire Chicago neighborhoods.
+              Research the locations that matter to your business, from
+              individual properties to entire Chicago neighborhoods.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
@@ -99,42 +92,30 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Reserved for a future Chicago hero photograph.
-              To add one later, replace the placeholder contents with an image
-              from /public, such as /images/chicago-hero.jpg. */}
-
           <div className="relative aspect-[4/3] overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
-
-
-<img
-  src="/1.jpg"
-  alt="Chicago skyline"
-  className="h-full w-full object-cover"
-  style={{
-    transform: "scale(1.5) translateX(-10%)",
-    objectPosition: "55% 65%",
-  }}
-/>
-
-
+            <img
+              src="/1.jpg"
+              alt="Chicago skyline"
+              className="h-full w-full object-cover"
+              style={{
+                transform: "scale(1.5) translateX(-10%)",
+                objectPosition: "55% 65%",
+              }}
+            />
           </div>
         </div>
       </section>
 
-
-      <section
-        id="tools"
-        className="mx-auto max-w-6xl px-6 py-16"
-      >
+      <section id="tools" className="mx-auto max-w-6xl px-6 py-16">
         <div className="mb-8">
           <h2 className="text-3xl font-bold tracking-tight">
             Explore Chicago
           </h2>
 
           <p className="mt-3 max-w-2xl text-slate-600">
-            Choose a tool to explore public data.
-            Each tool focuses on a different part of
-            Chicago&apos;s business, property, and neighborhood activity.
+            Choose a tool to explore public data. Each tool focuses on
+            a different part of Chicago&apos;s business, property, and
+            neighborhood activity.
           </p>
         </div>
 
@@ -173,7 +154,7 @@ export default function Home() {
             What can you discover?
           </h2>
 
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {[
               "Which neighborhoods have fewer competing businesses?",
               "Where are new businesses receiving licenses?",
@@ -193,98 +174,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-6 py-16">
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold tracking-tight">
-            More Chicago data to explore
-          </h2>
-
-          <p className="mt-3 text-slate-600">
-            Additional public datasets and research tools
-            are being evaluated for inclusion.
-          </p>
-        </div>
-
-        <div className="grid gap-6 md:grid-cols-3">
-          {upcoming.map((item) => (
-            <div
-              key={item.title}
-              className="rounded-2xl border border-slate-200 bg-slate-50 p-6"
-            >
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Planned
-              </span>
-
-              <h3 className="mt-3 text-lg font-semibold">
-                {item.title}
-              </h3>
-
-              <p className="mt-3 text-sm leading-7 text-slate-600">
-                {item.description}
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <footer className="border-t border-slate-800 bg-slate-900 text-white">
-        <div className="mx-auto max-w-6xl px-6 py-12">
-          <div className="grid gap-10 md:grid-cols-2">
-            <div>
-              <h2 className="text-xl font-bold">
-                MetroSift
-              </h2>
-
-              <p className="mt-2 text-sm font-medium text-slate-300">
-                Find the signal in your city.
-              </p>
-
-              <p className="mt-4 max-w-md text-sm leading-7 text-slate-300">
-                A resource for exploring business,
-                property, and neighborhood intelligence
-                through publicly available data.
-              </p>
-
-              <p className="mt-4 text-sm leading-7 text-slate-400">
-                Making local information easier to find,
-                understand, and use.
-              </p>
-            </div>
-
-            <div>
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
-                Data &amp; Sources
-              </h3>
-
-              <p className="mt-4 text-sm leading-7 text-slate-300">
-                Data is primarily sourced from the
-                City of Chicago&apos;s official Open Data Portal,
-                which publishes public datasets maintained
-                by city departments and agencies.
-              </p>
-
-              <a
-                href="https://data.cityofchicago.org/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-4 inline-block text-sm font-medium text-white underline decoration-slate-500 underline-offset-4 hover:decoration-white"
-              >
-                Visit the City of Chicago Open Data Portal &nearr;
-              </a>
-            </div>
-          </div>
-
-          <div className="mt-10 border-t border-slate-700 pt-6">
-            <p className="text-xs leading-6 text-slate-400">
-              MetroSift is an independent resource and is not
-              affiliated with or endorsed by the City of Chicago.
-              Public datasets may contain errors, omissions,
-              or reporting delays. Refer to the original source
-              for official records.
-            </p>
-          </div>
-        </div>
-      </footer>
-    </main>
+ 
+    </div>
   );
 }
