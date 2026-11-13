@@ -1,4 +1,3 @@
-
 import Link from "next/link";
 
 type IconName =
@@ -352,7 +351,7 @@ export default function Home() {
       </section>
 
       {/* Clickable discovery questions */}
-     
+
       {/* Clickable discovery questions */}
       <section className="border-y border-slate-200 bg-slate-50">
         <div className="mx-auto max-w-6xl px-6 py-12">
@@ -401,6 +400,58 @@ export default function Home() {
                 </Link>
               );
             })}
+          </div>
+        </div>
+      </section>
+
+      {/* Newsletter signup */}
+      <section aria-labelledby="newsletter-heading" className="bg-white">
+        <div className="mx-auto max-w-6xl px-6 py-16">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-6 py-10 sm:px-10">
+            <div className="max-w-2xl">
+              <h2 id="newsletter-heading" className="text-2xl font-bold tracking-tight sm:text-3xl">
+                Stay informed about Chicago.
+              </h2>
+              <p className="mt-3 text-sm leading-7 text-slate-600 sm:text-base">
+                Get a periodic digest of new business licenses, building permits,
+                and noteworthy commercial activity across the city.
+              </p>
+            </div>
+
+            <form
+              action="https://buttondown.com/api/emails/embed-subscribe/metrosift"
+              method="post"
+              className="mt-7 max-w-xl"
+            >
+              <label htmlFor="newsletter-email" className="block text-sm font-semibold text-slate-800">
+                Email address
+              </label>
+              <div className="mt-2 flex flex-col gap-3 sm:flex-row">
+                <input
+                  id="newsletter-email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  placeholder="you@example.com"
+                  required
+                  className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                />
+                <button
+                  type="submit"
+                  className="rounded-lg bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                >
+                  Subscribe
+                </button>
+              </div>
+              <p className="mt-3 text-xs leading-5 text-slate-500">
+                Free to subscribe. Unsubscribe anytime. By subscribing, you agree
+                to receive MetroSift emails through Buttondown. See our{" "}
+                <Link href="/privacy" className="underline underline-offset-2 hover:text-slate-700">
+                  privacy policy
+                </Link>
+                .
+              </p>
+            </form>
           </div>
         </div>
       </section>

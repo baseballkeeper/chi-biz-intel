@@ -1,4 +1,3 @@
-
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -8,7 +7,7 @@ export const metadata: Metadata = {
     "Learn how MetroSift handles personal information, website analytics, cookies, and third-party services.",
 };
 
-const lastUpdated = "November 12, 2026";
+const lastUpdated = "November 13, 2026";
 
 export default function PrivacyPage() {
   return (
@@ -24,7 +23,7 @@ export default function PrivacyPage() {
           </h1>
 
           <p className="mt-4 text-sm text-slate-500">
-            Draft last updated: {lastUpdated}
+            Last updated: {lastUpdated}
           </p>
 
           <p className="mt-6 text-lg leading-8 text-slate-600">
@@ -70,14 +69,22 @@ export default function PrivacyPage() {
           </p>
 
           <p className="mt-4">
-            MetroSift currently focuses on public-data
-            research tools. Additional features, such as
-            accounts, newsletters, saved research areas,
-            or subscriptions, may involve additional
-            information collection if introduced.
-            This policy will be updated as appropriate
-            before those features are launched.
-          </p>
+              If you subscribe to the MetroSift newsletter,
+              you voluntarily provide an email address. Our
+              signup form submits that address directly to
+              Buttondown, our newsletter service provider,
+              for subscription management and email delivery.
+              Buttondown may also process subscription status,
+              confirmation activity, and information needed
+              to operate its service.
+            </p>
+
+            <p className="mt-4">
+              Future features, such as user accounts or saved
+              research areas, may involve additional information
+              collection. We will update this policy when those
+              features are introduced.
+            </p>
         </section>
 
         <section>
@@ -97,6 +104,47 @@ export default function PrivacyPage() {
             Where analytics are enabled, usage information
             may also be used to understand website
             performance and improve the platform.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-2xl font-bold text-slate-900">
+            Newsletter Subscriptions
+          </h2>
+
+          <p className="mt-4">
+            If you opt in to our newsletter, we use your email
+            address to send MetroSift updates about Chicago
+            business licenses, permits, and commercial activity.
+            We do not require a MetroSift account to subscribe.
+          </p>
+
+          <p className="mt-4">
+            Buttondown manages newsletter subscriptions and
+            delivery, including confirmation emails and
+            unsubscribe requests. You can unsubscribe using
+            the link included in newsletter emails. You may
+            also contact us through our{" "}
+            <Link
+              href="/contact"
+              className="font-semibold text-blue-700 hover:text-blue-900"
+            >
+              Contact
+            </Link>{" "}
+            page with a newsletter-related privacy request.
+          </p>
+
+          <p className="mt-4">
+            For more information about Buttondown's handling
+            of personal information, see its{" "}
+            <a
+              href="https://buttondown.com/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-blue-700 hover:text-blue-900"
+            >
+              privacy policy
+            </a>.
           </p>
         </section>
 
@@ -178,10 +226,13 @@ export default function PrivacyPage() {
           </p>
 
           <p className="mt-4">
-            Before public launch, this section should
-            identify material service providers and
-            explain their roles where appropriate.
-          </p>
+              Buttondown provides newsletter signup,
+              subscription management, and email delivery.
+              Other providers may support website hosting,
+              security, and infrastructure. We will review
+              and identify additional material providers as
+              deployment arrangements are finalized.
+            </p>
         </section>
 
         <section>
@@ -344,7 +395,7 @@ export default function PrivacyPage() {
             href="/"
             className="text-sm font-semibold text-blue-700 hover:text-blue-900"
           >
-            ← Back to MetroSift
+            &larr; Back to MetroSift
           </Link>
         </div>
       </div>
