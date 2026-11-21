@@ -481,7 +481,7 @@ export async function GET(request: Request) {
       permitResult,
       licenseResult,
       inspectionResult,
-    ] = await Promise.all([
+    ] = await Promise.allSettled([
       fetchAll(
         DATASETS.violations,
         violationSelect,
@@ -508,13 +508,42 @@ export async function GET(request: Request) {
       ),
     ]);
 
-    const violations = violationResult.rows
+    const sourceResults = {
+      violations: violationResult,
+      permits: permitResult,
+      licenses: licenseResult,
+      inspections: inspectionResult,
+    };
+
+    for (const [name, result] of Object.entries(sourceResults)) {
+      if (result.status === "rejected") {
+        console.error(`MetroSift property source ${name} failed:`, result.reason);
+      }
+    }
+
+    if (Object.values(sourceResults).every((result) => result.status === "rejected")) {
+      throw new Error("All core property sources unavailable");
+    }
+
+    const emptyResult = {
+      rows: [] as RawRow[],
+      complete: false,
+      limited: false,
+      candidatesScanned: 0,
+    };
+
+    const violationData = violationResult.status === "fulfilled" ? violationResult.value : emptyResult;
+    const permitData = permitResult.status === "fulfilled" ? permitResult.value : emptyResult;
+    const licenseData = licenseResult.status === "fulfilled" ? licenseResult.value : emptyResult;
+    const inspectionData = inspectionResult.status === "fulfilled" ? inspectionResult.value : emptyResult;
+
+    const violations = violationData.rows
       .filter((row) =>
         matchesAddress(row.address || "", target)
       )
       .map(formatViolation);
 
-    const permits = permitResult.rows
+    const permits = permitData.rows
       .filter((row) => {
         const permitAddress = [
           row.street_number,
@@ -528,84 +557,91 @@ export async function GET(request: Request) {
       })
       .map(formatPermit);
 
-    const licenses = licenseResult.rows
+    const licenses = licenseData.rows
       .filter((row) =>
         matchesAddress(row.address || "", target, true)
       )
       .map((row) => formatLicense(row, target));
 
-    const inspections = inspectionResult.rows
+    const inspections = inspectionData.rows
       .filter((row) =>
         matchesAddress(row.address || "", target, true)
       )
       .map((row) => formatInspection(row, target));
 
     const complete =
-      violationResult.complete &&
-      permitResult.complete &&
-      licenseResult.complete &&
-      inspectionResult.complete;
+      violationData.complete &&
+      permitData.complete &&
+      licenseData.complete &&
+      inspectionData.complete;
 
     return NextResponse.json({
       address,
       normalizedAddress: target,
 
       summary: {
-        buildingViolations: violations.length,
-        buildingPermits: permits.length,
-        businessLicenses: licenses.length,
-        foodInspections: inspections.length,
+        buildingViolations: violationResult.status === "fulfilled" ? violations.length : null,
+        buildingPermits: permitResult.status === "fulfilled" ? permits.length : null,
+        businessLicenses: licenseResult.status === "fulfilled" ? licenses.length : null,
+        foodInspections: inspectionResult.status === "fulfilled" ? inspections.length : null,
       },
+      unavailableSources: Object.entries(sourceResults)
+        .filter(([, result]) => result.status === "rejected")
+        .map(([name]) => name),
 
       violations: {
+        available: violationResult.status === "fulfilled",
         source: {
           dataset: DATASETS.violations,
           name: "Chicago Building Violations",
         },
         count: violations.length,
         candidatesScanned:
-          violationResult.candidatesScanned,
-        complete: violationResult.complete,
-        limited: violationResult.limited,
+          violationData.candidatesScanned,
+        complete: violationData.complete,
+        limited: violationData.limited,
         records: violations,
       },
 
       permits: {
+        available: permitResult.status === "fulfilled",
         source: {
           dataset: DATASETS.permits,
           name: "Chicago Building Permits",
         },
         count: permits.length,
         candidatesScanned:
-          permitResult.candidatesScanned,
-        complete: permitResult.complete,
-        limited: permitResult.limited,
+          permitData.candidatesScanned,
+        complete: permitData.complete,
+        limited: permitData.limited,
         records: permits,
       },
 
       licenses: {
+        available: licenseResult.status === "fulfilled",
         source: {
           dataset: DATASETS.licenses,
           name: "Chicago Business Licenses",
         },
         count: licenses.length,
         candidatesScanned:
-          licenseResult.candidatesScanned,
-        complete: licenseResult.complete,
-        limited: licenseResult.limited,
+          licenseData.candidatesScanned,
+        complete: licenseData.complete,
+        limited: licenseData.limited,
         records: licenses,
       },
 
       inspections: {
+        available: inspectionResult.status === "fulfilled",
         source: {
           dataset: DATASETS.inspections,
           name: "Chicago Food Inspections",
         },
         count: inspections.length,
         candidatesScanned:
-          inspectionResult.candidatesScanned,
-        complete: inspectionResult.complete,
-        limited: inspectionResult.limited,
+          inspectionData.candidatesScanned,
+        complete: inspectionData.complete,
+        limited: inspectionData.limited,
         records: inspections,
       },
 
@@ -620,7 +656,8 @@ export async function GET(request: Request) {
         "Food inspection outcomes refer to individual establishments. " +
         "Completeness applies to queried address formats, " +
         "not every possible historical address variant. " +
-        "Source status codes are preserved without interpretation.",
+        "Source status codes are preserved without interpretation. " +
+        "Unavailable sources are excluded from counts and their records cannot be inferred.",
     });
   } catch (error) {
     console.error("MetroSift property lookup failed:", error);

@@ -97,15 +97,16 @@ type VacancyData = {
 type PropertyData = {
   address: string;
   summary: {
-    buildingViolations: number;
-    buildingPermits: number;
-    businessLicenses: number;
-    foodInspections: number;
+    buildingViolations: number | null;
+    buildingPermits: number | null;
+    businessLicenses: number | null;
+    foodInspections: number | null;
   };
-  violations: { records: Violation[] };
-  permits: { records: Permit[] };
-  licenses: { records: License[] };
-  inspections: { records: Inspection[] };
+  violations: { records: Violation[]; available: boolean };
+  permits: { records: Permit[]; available: boolean };
+  licenses: { records: License[]; available: boolean };
+  inspections: { records: Inspection[]; available: boolean };
+  unavailableSources: string[];
   complete: boolean;
   refreshedAt: string;
   note: string;
@@ -611,6 +612,19 @@ export default function PropertyPage() {
     });
   }
 
+  const unavailableLabels: Record<string, string> = {
+    violations: "Building violations",
+    permits: "Building permits",
+    licenses: "Business licenses",
+    inspections: "Food inspections",
+  };
+
+  const unavailableFilter =
+    filter === "violation" ? "violations" :
+    filter === "permit" ? "permits" :
+    filter === "license" ? "licenses" :
+    filter === "inspection" ? "inspections" : null;
+
   const summaryCards: {
     label: string;
     value: number | null;
@@ -746,11 +760,17 @@ export default function PropertyPage() {
               <p className="mt-2 text-sm text-slate-500">
                 {data.complete
                   ? "All matching property query results retrieved"
-                  : "Some source results may be incomplete"}
+                  : "Some source results are unavailable or may be incomplete"}
                 {" | "} Updated{" "}
                 {formatDate(data.refreshedAt)}
               </p>
             </div>
+
+            {data.unavailableSources.length > 0 && (
+              <p role="status" className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                {data.unavailableSources.map((source) => unavailableLabels[source] || source).join(", ")} {data.unavailableSources.length === 1 ? "is" : "are"} temporarily unavailable. Their counts are shown as N/A, not zero. Other available records are still shown.
+              </p>
+            )}
 
             {requestsError && (
               <p
@@ -850,11 +870,13 @@ export default function PropertyPage() {
 
               {filteredTimeline.length === 0 ? (
                 <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-8 text-sm text-slate-600">
-                  {filter === "311" && requestsError
+                  {unavailableFilter && data.unavailableSources.includes(unavailableFilter)
+                    ? `${unavailableLabels[unavailableFilter]} records are temporarily unavailable. This does not mean the property has no records in this category.`
+                    : filter === "311" && requestsError
                     ? "311 records are temporarily unavailable. This does not mean the property has no 311 history."
                     : filter === "vacancy" && (requestsError || vacancyError)
                       ? "Vacant-building records are incomplete because modern 311 requests or historical vacancy reports could not be retrieved. This does not mean the property has no vacant-building reports."
-                      : filter === "all" && (requestsError || vacancyError)
+                      : filter === "all" && (requestsError || vacancyError || data.unavailableSources.length > 0)
                         ? "No matching records were returned by the available sources. Some sources are temporarily unavailable, so this is not a complete property history."
                         : "No matching records found in this category."}
                 </div>
