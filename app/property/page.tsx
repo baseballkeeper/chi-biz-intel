@@ -850,9 +850,13 @@ export default function PropertyPage() {
 
               {filteredTimeline.length === 0 ? (
                 <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-8 text-sm text-slate-600">
-                  No matching records found in this category.
-                  {(requestsError || vacancyError) &&
-                    " Some sources are temporarily unavailable."}
+                  {filter === "311" && requestsError
+                    ? "311 records are temporarily unavailable. This does not mean the property has no 311 history."
+                    : filter === "vacancy" && (requestsError || vacancyError)
+                      ? "Vacant-building records are incomplete because modern 311 requests or historical vacancy reports could not be retrieved. This does not mean the property has no vacant-building reports."
+                      : filter === "all" && (requestsError || vacancyError)
+                        ? "No matching records were returned by the available sources. Some sources are temporarily unavailable, so this is not a complete property history."
+                        : "No matching records found in this category."}
                 </div>
               ) : (
                 <div className="mt-6 space-y-3">
