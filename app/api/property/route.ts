@@ -154,6 +154,7 @@ async function fetchRows(
 
   const response = await fetch(url, {
     next: { revalidate: 900 },
+    signal: AbortSignal.timeout(10000),
     headers: {
       "User-Agent": "MetroSift/1.0",
     },
@@ -622,13 +623,11 @@ export async function GET(request: Request) {
         "Source status codes are preserved without interpretation.",
     });
   } catch (error) {
+    console.error("MetroSift property lookup failed:", error);
+
     return NextResponse.json(
       {
-        error: "Property lookup failed",
-        details:
-          error instanceof Error
-            ? error.message
-            : String(error),
+        error: "Property lookup temporarily unavailable. Please try again shortly.",
       },
       { status: 502 }
     );
