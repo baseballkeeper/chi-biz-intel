@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Violation = {
   id: string;
@@ -416,6 +416,8 @@ export default function PropertyPage() {
   const [visibleCount, setVisibleCount] =
     useState(25);
 
+  const timelineRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const controller = new AbortController();
 
@@ -592,6 +594,21 @@ export default function PropertyPage() {
     setFilter(nextFilter);
     setExpanded(null);
     setVisibleCount(25);
+
+    // Move the selected results into view after React updates the timeline.
+    // Respect visitors who prefer reduced motion.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const reduceMotion = window.matchMedia(
+          "(prefers-reduced-motion: reduce)"
+        ).matches;
+
+        timelineRef.current?.scrollIntoView({
+          behavior: reduceMotion ? "instant" : "smooth",
+          block: "start",
+        });
+      });
+    });
   }
 
   const summaryCards: {
@@ -792,7 +809,7 @@ export default function PropertyPage() {
               ))}
             </div>
 
-            <div className="mt-12">
+            <div ref={timelineRef} className="mt-12 scroll-mt-6" id="property-activity-timeline">
               <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
                 <div>
                   <h2 className="text-2xl font-bold tracking-tight">
